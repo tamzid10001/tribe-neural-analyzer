@@ -203,11 +203,19 @@
 
     if (mode === 'text') {
       if (dropzone) dropzone.classList.add('hidden');
+      if (scriptRow) scriptRow.classList.remove('hidden');
+      if (btnMic) btnMic.classList.remove('hidden');
     } else {
       if (dropzone) dropzone.classList.remove('hidden');
       if (dropTitle) dropTitle.textContent = cfg.title;
       if (dropHint) dropHint.textContent = cfg.hint;
       if (fileUploader) fileUploader.accept = cfg.accept;
+      if (scriptRow) scriptRow.classList.add('hidden');
+      if (btnMic) btnMic.classList.add('hidden');
+      if (textarea) {
+        textarea.value = '';
+        textarea.style.height = 'auto';
+      }
     }
 
     toggleSendButton();

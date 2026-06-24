@@ -193,17 +193,32 @@ textarea {
 #app-container.state-chat {
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
 }
 
 #app-container.state-chat .welcome-glow-aura {
   display: none;
 }
 
+#app-container.state-chat .main-viewport {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+}
+
 #app-container.state-chat .chat-scroller {
   display: block;
   flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
-  padding-bottom: 280px;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 300px;
 }
 
 #app-container.state-chat .composer-container {
