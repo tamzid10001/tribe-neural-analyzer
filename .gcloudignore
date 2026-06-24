@@ -1,0 +1,10 @@
+# Custom .gcloudignore to ensure scratch/tribev2_repo is uploaded to Cloud Build
+.git
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+node_modules/
+.npm/

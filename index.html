@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRIBE v2 Neural Analyzer — Predict Cortical Response & Virality</title>
+  <meta name="description" content="Upload any video, image, audio, or text to predict how the human cortex responds using Meta's TRIBE v2 atlas and score virality via the Knutson AIM framework." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- App Main State-driven Wrapper -->
+  <div id="app-container" class="state-landing">
+    
+    <!-- Soft glowing light-blue/violet radial aura background -->
+    <div class="welcome-glow-aura" aria-hidden="true"></div>
+
+    <!-- Hidden particles canvas overlay for active brain waves -->
+    <canvas id="particle-canvas" aria-hidden="true"></canvas>
+
+    <!-- Floating Top Bar (Invisible/minimalist, server status) -->
+    <div class="top-bar">
+      <div class="server-status-container" id="server-status">
+        <span class="status-dot offline" id="server-status-dot"></span>
+        <span class="status-text" id="server-status-text">Engine Offline</span>
+      </div>
+    </div>
+
+    <!-- Main Viewport containing dynamic states -->
+    <div class="main-viewport">
+      
+      <!-- Landing Hero Heading (Fades out when chat begins) -->
+      <div class="landing-hero" id="landing-hero">
+        <h1 class="landing-title">Any new content to scan?</h1>
+      </div>
+
+      <!-- Conversational Chat Messages Scroller -->
+      <div class="chat-scroller" id="chat-scroller">
+        <div class="chat-messages-thread" id="chat-messages">
+          <!-- Dynamic conversation appended here -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Fixed/Centered Input Footer & Composer Pill -->
+    <footer class="composer-container" id="composer-container">
+      <div class="composer-inner">
+        
+        <!-- Media Attachment Preview Badge Row -->
+        <div class="attachment-preview-row hidden" id="attachment-preview-row">
+          <!-- Dynamically populated files pills -->
+        </div>
+
+        <!-- Gemini-Style Input Pill -->
+        <div class="composer-pill">
+          
+          <!-- Attachment Button -->
+          <button class="btn-attach" id="btn-attach-media" title="Upload video, image, or audio" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+
+          <!-- Divider line -->
+          <div class="composer-separator"></div>
+
+          <!-- Textarea Composer -->
+          <textarea id="chat-textarea" placeholder="Ask TRIBE (paste text, script, or upload media)..." rows="1"></textarea>
+
+          <!-- Input Right Actions Panel -->
+          <div class="composer-right-actions">
+            
+            <!-- Custom Inference Engine Selector (Styled exactly like 'Thinking' capsule) -->
+            <div class="engine-dropdown-container">
+              <button class="btn-engine-select" id="btn-engine-select" title="fMRI Engine" type="button">
+                <span id="engine-display-label">Thinking</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="12">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+              <div class="engine-dropdown-menu hidden" id="engine-dropdown-menu">
+                <div class="engine-option active" id="option-cloud-run" data-mode="cloud">
+                  <span class="option-check">✓</span>
+                  <div class="option-meta">
+                    <span class="option-title">Cloud Run Engine</span>
+                    <span class="option-subtitle">Meta's pre-trained foundation predictions</span>
+                  </div>
+                </div>
+                <div class="engine-option" id="option-browser-sim" data-mode="sim">
+                  <span class="option-check"></span>
+                  <div class="option-meta">
+                    <span class="option-title">Browser Simulation</span>
+                    <span class="option-subtitle">fMRI prediction simulation model</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Web Speech API Microphone Dictation -->
+            <button class="btn-mic" id="btn-mic" title="Voice dictation" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+              </svg>
+            </button>
+
+            <!-- Submit Send Button -->
+            <button class="btn-send disabled" id="btn-chat-send" title="Send" type="button" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
+                <line x1="22" y1="2" x2="11" y2="13"></line>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+              </svg>
+            </button>
+          </div>
+
+        </div>
+
+        <p class="composer-disclaimer">TRIBE v2 predicts directional, in-silico fMRI cortical responses from Meta's foundation proxies.</p>
+      </div>
+    </footer>
+
+    <!-- Slide-out Settings Drawer (Right-aligned, glassmorphic settings overrides) -->
+    <div class="settings-drawer" id="settings-drawer">
+      <div class="drawer-header">
+        <h3>Engine Override</h3>
+        <button class="btn-drawer-close" id="btn-drawer-close">✕</button>
+      </div>
+      <div class="drawer-content">
+        <p class="drawer-description">Directly connects to your private Google Cloud Run server or overrides secure tokens.</p>
+        <div class="settings-group">
+          <label for="backend-url-input">Cloud Run Service URL</label>
+          <input type="text" id="backend-url-input" placeholder="https://tribe-backend-..." />
+        </div>
+        <div class="settings-group">
+          <label for="backend-token-input">OIDC ID Token</label>
+          <textarea id="backend-token-input" rows="7" placeholder="eyJhbGciOiJSUzI1NiIsImtpZCI6..."></textarea>
+        </div>
+        <button class="btn-save-settings" id="btn-save-backend-url">Save Overrides</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Hidden HTML5 Media decoders & canvases for feature extraction -->
+  <input type="file" id="file-uploader" accept="video/*,image/*,audio/*" hidden />
+  <video id="hidden-video" crossorigin="anonymous" style="display:none"></video>
+  <canvas id="hidden-canvas" style="display:none"></canvas>
+  <audio id="hidden-audio" crossorigin="anonymous" style="display:none"></audio>
+
+  <!-- Application core JS -->
+  <script src="app.js"></script>
+</body>
+</html>
