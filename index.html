@@ -34,7 +34,9 @@
       
       <!-- Landing Hero Heading (Fades out when chat begins) -->
       <div class="landing-hero" id="landing-hero">
-        <h1 class="landing-title">Any new content to scan?</h1>
+        <p class="landing-eyebrow">Meta TRIBE v2 · Knutson AIM Framework</p>
+        <h1 class="landing-title">Predict cortical response<br /><span class="gradient-text">before you publish</span></h1>
+        <p class="landing-subtitle">Upload video, audio, image, or paste a script to map 9 brain networks and score viral potential.</p>
       </div>
 
       <!-- Conversational Chat Messages Scroller -->
@@ -46,83 +48,121 @@
 
     </div>
 
-    <!-- Fixed/Centered Input Footer & Composer Pill -->
+    <!-- Neural Scan Composer -->
     <footer class="composer-container" id="composer-container">
       <div class="composer-inner">
-        
-        <!-- Media Attachment Preview Badge Row -->
-        <div class="attachment-preview-row hidden" id="attachment-preview-row">
-          <!-- Dynamically populated files pills -->
+
+        <div class="composer-quick-scans" id="composer-quick-scans">
+          <button type="button" class="quick-scan-chip" data-prompt="Last one standing wins $1,000,000 — who will take the prize? Watch their faces when the timer hits zero.">TikTok hook</button>
+          <button type="button" class="quick-scan-chip" data-prompt="Breaking down the game-winning play — slow motion replay with crowd eruption audio.">Sports highlight</button>
+          <button type="button" class="quick-scan-chip" data-prompt="I tried the viral 24-hour challenge so you don't have to. Here's what happened in the first 10 seconds.">Challenge intro</button>
+          <button type="button" class="quick-scan-chip" data-mode="video">Upload video</button>
         </div>
 
-        <!-- Gemini-Style Input Pill -->
-        <div class="composer-pill">
-          
-          <!-- Attachment Button -->
-          <button class="btn-attach" id="btn-attach-media" title="Upload video, image, or audio" type="button">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="18" height="18">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-
-          <!-- Divider line -->
-          <div class="composer-separator"></div>
-
-          <!-- Textarea Composer -->
-          <textarea id="chat-textarea" placeholder="Ask TRIBE (paste text, script, or upload media)..." rows="1"></textarea>
-
-          <!-- Input Right Actions Panel -->
-          <div class="composer-right-actions">
-            
-            <!-- Custom Inference Engine Selector (Styled exactly like 'Thinking' capsule) -->
-            <div class="engine-dropdown-container">
-              <button class="btn-engine-select" id="btn-engine-select" title="fMRI Engine" type="button">
-                <span id="engine-display-label">Thinking</span>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="12">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
-              <div class="engine-dropdown-menu hidden" id="engine-dropdown-menu">
-                <div class="engine-option active" id="option-cloud-run" data-mode="cloud">
-                  <span class="option-check">✓</span>
-                  <div class="option-meta">
-                    <span class="option-title">Cloud Run Engine</span>
-                    <span class="option-subtitle">Meta's pre-trained foundation predictions</span>
-                  </div>
-                </div>
-                <div class="engine-option" id="option-browser-sim" data-mode="sim">
-                  <span class="option-check"></span>
-                  <div class="option-meta">
-                    <span class="option-title">Browser Simulation</span>
-                    <span class="option-subtitle">fMRI prediction simulation model</span>
-                  </div>
-                </div>
+        <div class="scan-composer" id="scan-composer">
+          <div class="scan-composer-header">
+            <div class="scan-composer-brand">
+              <span class="scan-brand-icon" aria-hidden="true">🧠</span>
+              <div>
+                <span class="scan-brand-title">Stimulus Intake</span>
+                <span class="scan-brand-sub">9-network fMRI mapping · AIM virality score</span>
               </div>
             </div>
+            <div class="network-coverage-strip" aria-label="Networks analyzed">
+              <span class="net-chip" style="--net-color:#3b82f6" title="V1 Primary Visual">V1</span>
+              <span class="net-chip" style="--net-color:#8b5cf6" title="FFA Fusiform Face">FFA</span>
+              <span class="net-chip" style="--net-color:#a855f7" title="EBA Body Area">EBA</span>
+              <span class="net-chip" style="--net-color:#06b6d4" title="PPA Place Area">PPA</span>
+              <span class="net-chip" style="--net-color:#14b8a6" title="STS Temporal Sulcus">STS</span>
+              <span class="net-chip" style="--net-color:#f59e0b" title="Language">LANG</span>
+              <span class="net-chip" style="--net-color:#22c55e" title="Default Mode">DMN</span>
+              <span class="net-chip" style="--net-color:#ec4899" title="NAcc Reward">NAcc</span>
+              <span class="net-chip" style="--net-color:#ef4444" title="Anterior Insula">AIns</span>
+            </div>
+          </div>
 
-            <!-- Web Speech API Microphone Dictation -->
-            <button class="btn-mic" id="btn-mic" title="Voice dictation" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-              </svg>
+          <div class="modality-tabs" role="tablist" aria-label="Stimulus type">
+            <button type="button" class="modality-tab active" id="tab-video" data-mode="video" role="tab" aria-selected="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+              Video
             </button>
-
-            <!-- Submit Send Button -->
-            <button class="btn-send disabled" id="btn-chat-send" title="Send" type="button" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="18" height="18">
-                <line x1="22" y1="2" x2="11" y2="13"></line>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-              </svg>
+            <button type="button" class="modality-tab" id="tab-audio" data-mode="audio" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+              Audio
+            </button>
+            <button type="button" class="modality-tab" id="tab-image" data-mode="image" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+              Image
+            </button>
+            <button type="button" class="modality-tab" id="tab-script" data-mode="text" role="tab" aria-selected="false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Script
             </button>
           </div>
 
+          <div class="stimulus-panel">
+            <div class="stimulus-dropzone" id="stimulus-dropzone">
+              <input type="file" id="file-uploader" accept="video/*" hidden />
+              <button type="button" class="dropzone-hit" id="btn-dropzone-browse">
+                <span class="dropzone-icon" id="dropzone-icon">🎬</span>
+                <span class="dropzone-title" id="dropzone-title">Drop video stimulus here</span>
+                <span class="dropzone-hint" id="dropzone-hint">MP4, MOV, WebM · maps V1, FFA, EBA, STS, NAcc onset</span>
+                <span class="dropzone-cta">Browse files</span>
+              </button>
+            </div>
+
+            <div class="stimulus-script-row">
+              <label class="stimulus-label" for="chat-textarea" id="stimulus-label">Hook, script, or caption</label>
+              <textarea id="chat-textarea" placeholder="Paste your opening hook, voiceover script, or on-screen text…" rows="2"></textarea>
+            </div>
+
+            <div class="attachment-preview-row hidden" id="attachment-preview-row"></div>
+          </div>
+
+          <div class="scan-action-bar">
+            <div class="scan-action-left">
+              <div class="engine-dropdown-container">
+                <button class="btn-engine-select" id="btn-engine-select" title="Inference engine" type="button">
+                  <span class="engine-icon" aria-hidden="true">⚡</span>
+                  <span id="engine-display-label">TRIBE v2</span>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="12"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="engine-dropdown-menu hidden" id="engine-dropdown-menu">
+                  <div class="engine-option active" id="option-cloud-run" data-mode="cloud">
+                    <span class="option-check">✓</span>
+                    <div class="option-meta">
+                      <span class="option-title">TRIBE v2 Cloud</span>
+                      <span class="option-subtitle">Meta foundation model · full fMRI vertex prediction</span>
+                    </div>
+                  </div>
+                  <div class="engine-option" id="option-browser-sim" data-mode="sim">
+                    <span class="option-check"></span>
+                    <div class="option-meta">
+                      <span class="option-title">Browser Simulation</span>
+                      <span class="option-subtitle">Client-side feature extraction · offline preview</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <button class="btn-mic" id="btn-mic" title="Dictate script" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="17" height="17">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1"></path>
+                  <line x1="12" y1="19" x2="12" y2="23"></line>
+                  <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+              </button>
+            </div>
+            <button class="btn-scan disabled" id="btn-chat-send" title="Run neural scan" type="button" disabled>
+              <span>Run Neural Scan</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
-        <p class="composer-disclaimer">TRIBE v2 predicts directional, in-silico fMRI cortical responses from Meta's foundation proxies.</p>
+        <p class="composer-disclaimer">In-silico cortical activations are directional proxies — not clinical fMRI. TRIBE v2 maps content → 9 canonical HCP networks.</p>
       </div>
     </footer>
 
@@ -149,7 +189,6 @@
   </div>
 
   <!-- Hidden HTML5 Media decoders & canvases for feature extraction -->
-  <input type="file" id="file-uploader" accept="video/*,image/*,audio/*" hidden />
   <video id="hidden-video" crossorigin="anonymous" style="display:none"></video>
   <canvas id="hidden-canvas" style="display:none"></canvas>
   <audio id="hidden-audio" crossorigin="anonymous" style="display:none"></audio>

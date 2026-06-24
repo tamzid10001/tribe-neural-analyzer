@@ -125,9 +125,46 @@
 
   // ─── STATE ─────────────────────────────────────────────────────
   var stagedFiles = [];
+  var stimulusMode = 'video';
   var engineMode = 'cloud';
   var backendUrl = getDefaultBackendUrl();
   var backendToken = '';
+  var messageCounter = 0;
+
+  var MODALITY_CONFIG = {
+    video: {
+      icon: '🎬',
+      title: 'Drop video stimulus here',
+      hint: 'MP4, MOV, WebM · maps V1, FFA, EBA, STS, NAcc onset',
+      accept: 'video/*',
+      label: 'Hook, script, or caption',
+      placeholder: 'Optional: paste voiceover, on-screen text, or describe the hook…',
+    },
+    audio: {
+      icon: '🎵',
+      title: 'Drop audio stimulus here',
+      hint: 'MP3, WAV, FLAC · maps STS prosody, NAcc reward bursts, AIns aversion',
+      accept: 'audio/*',
+      label: 'Transcript or show notes',
+      placeholder: 'Optional: paste podcast transcript or narration script…',
+    },
+    image: {
+      icon: '🖼️',
+      title: 'Drop thumbnail or frame here',
+      hint: 'JPG, PNG, WebP · maps V1 contrast, FFA faces, PPA scene composition',
+      accept: 'image/*',
+      label: 'Caption or context',
+      placeholder: 'Describe what viewers see — hook text, title overlay, etc.',
+    },
+    text: {
+      icon: '📝',
+      title: '',
+      hint: '',
+      accept: '',
+      label: 'Script or hook text',
+      placeholder: 'Paste your opening hook, ad copy, or narration — TRIBE maps LANG, DMN, NAcc from syntax…',
+    },
+  };
 
   // ═══════════════════════════════════════════════════════════════
   // MODULE 1: PARTICLE BACKGROUND
@@ -217,23 +254,56 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // MODULE 2: COMPOSER & FILE ATTACHMENTS
+  // MODULE 2: NEURAL SCAN COMPOSER
   // ═══════════════════════════════════════════════════════════════
+  function setStimulusMode(mode) {
+    stimulusMode = mode;
+    localStorage.setItem('tribe_stimulus_mode', mode);
+
+    var cfg = MODALITY_CONFIG[mode] || MODALITY_CONFIG.video;
+    var dropzone = $('stimulus-dropzone');
+    var fileUploader = $('file-uploader');
+    var dropIcon = $('dropzone-icon');
+    var dropTitle = $('dropzone-title');
+    var dropHint = $('dropzone-hint');
+    var stimLabel = $('stimulus-label');
+    var textarea = $('chat-textarea');
+
+    document.querySelectorAll('.modality-tab').forEach(function (tab) {
+      var isActive = tab.getAttribute('data-mode') === mode;
+      tab.classList.toggle('active', isActive);
+      tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    if (mode === 'text') {
+      if (dropzone) dropzone.classList.add('hidden');
+    } else {
+      if (dropzone) dropzone.classList.remove('hidden');
+      if (dropIcon) dropIcon.textContent = cfg.icon;
+      if (dropTitle) dropTitle.textContent = cfg.title;
+      if (dropHint) dropHint.textContent = cfg.hint;
+      if (fileUploader) fileUploader.accept = cfg.accept;
+    }
+
+    if (stimLabel) stimLabel.textContent = cfg.label;
+    if (textarea) textarea.placeholder = cfg.placeholder;
+    toggleSendButton();
+  }
+
   function initChatComposer() {
     var textarea = $('chat-textarea');
-    var btnAttach = $('btn-attach-media');
     var fileUploader = $('file-uploader');
     var btnSend = $('btn-chat-send');
     var btnMic = $('btn-mic');
+    var btnDropzone = $('btn-dropzone-browse');
+    var dropzone = $('stimulus-dropzone');
 
-    // Textarea height auto-growth
     if (textarea) {
       textarea.addEventListener('input', function () {
         textarea.style.height = 'auto';
-        textarea.style.height = Math.min(180, textarea.scrollHeight) + 'px';
+        textarea.style.height = Math.min(140, textarea.scrollHeight) + 'px';
         toggleSendButton();
       });
-      // Handle Enter (Submit) vs Shift+Enter (Newline)
       textarea.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
@@ -242,24 +312,58 @@
       });
     }
 
-    // Attach media button
-    if (btnAttach && fileUploader) {
-      btnAttach.addEventListener('click', function () {
-        fileUploader.click();
-      });
+    if (btnDropzone && fileUploader) {
+      btnDropzone.addEventListener('click', function () { fileUploader.click(); });
       fileUploader.addEventListener('change', function () {
         if (fileUploader.files.length > 0) {
           handleSelectedFile(fileUploader.files[0]);
         }
+        fileUploader.value = '';
       });
     }
 
-    // Send click
-    if (btnSend) {
-      btnSend.addEventListener('click', submitQuery);
+    if (dropzone && fileUploader) {
+      dropzone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+      });
+      dropzone.addEventListener('dragleave', function () {
+        dropzone.classList.remove('drag-over');
+      });
+      dropzone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleSelectedFile(e.dataTransfer.files[0]);
+        }
+      });
     }
 
-    // Web Speech API Voice Dictation
+    document.querySelectorAll('.modality-tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        setStimulusMode(tab.getAttribute('data-mode'));
+      });
+    });
+
+    document.querySelectorAll('.quick-scan-chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        if (chip.getAttribute('data-mode')) {
+          setStimulusMode(chip.getAttribute('data-mode'));
+          if (fileUploader) fileUploader.click();
+          return;
+        }
+        var prompt = chip.getAttribute('data-prompt');
+        if (prompt && textarea) {
+          setStimulusMode('text');
+          textarea.value = prompt;
+          textarea.dispatchEvent(new Event('input'));
+          textarea.focus();
+        }
+      });
+    });
+
+    if (btnSend) btnSend.addEventListener('click', submitQuery);
+
     var recognition = null;
     if (window.webkitSpeechRecognition || window.SpeechRecognition) {
       var SpeechRec = window.webkitSpeechRecognition || window.SpeechRecognition;
@@ -267,16 +371,9 @@
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.lang = 'en-US';
-
-      recognition.onstart = function () {
-        if (btnMic) btnMic.classList.add('listening');
-      };
-      recognition.onend = function () {
-        if (btnMic) btnMic.classList.remove('listening');
-      };
-      recognition.onerror = function () {
-        if (btnMic) btnMic.classList.remove('listening');
-      };
+      recognition.onstart = function () { if (btnMic) btnMic.classList.add('listening'); };
+      recognition.onend = function () { if (btnMic) btnMic.classList.remove('listening'); };
+      recognition.onerror = function () { if (btnMic) btnMic.classList.remove('listening'); };
       recognition.onresult = function (e) {
         var resultText = e.results[0][0].transcript;
         if (textarea) {
@@ -292,15 +389,11 @@
           alert('Web Speech API is not supported in this browser.');
           return;
         }
-        if (btnMic.classList.contains('listening')) {
-          recognition.stop();
-        } else {
-          recognition.start();
-        }
+        if (btnMic.classList.contains('listening')) recognition.stop();
+        else recognition.start();
       });
     }
 
-    // Engine Selector dropdown action inside composer
     var btnEngine = $('btn-engine-select');
     var engineMenu = $('engine-dropdown-menu');
     var optionCloud = $('option-cloud-run');
@@ -321,54 +414,35 @@
       engineMode = mode;
       localStorage.setItem('tribe_engine_mode', mode);
       if (mode === 'cloud') {
-        if (displayLabel) displayLabel.textContent = 'Thinking';
+        if (displayLabel) displayLabel.textContent = 'TRIBE v2';
         if (optionCloud) optionCloud.classList.add('active');
         if (optionSim) optionSim.classList.remove('active');
-        var optCloudCheck = optionCloud ? optionCloud.querySelector('.option-check') : null;
-        var optSimCheck = optionSim ? optionSim.querySelector('.option-check') : null;
-        if (optCloudCheck) optCloudCheck.textContent = '✓';
-        if (optSimCheck) optSimCheck.textContent = '';
       } else {
-        if (displayLabel) displayLabel.textContent = 'Simulation';
+        if (displayLabel) displayLabel.textContent = 'Browser Sim';
         if (optionSim) optionSim.classList.add('active');
         if (optionCloud) optionCloud.classList.remove('active');
-        var optCloudCheck = optionCloud ? optionCloud.querySelector('.option-check') : null;
-        var optSimCheck = optionSim ? optionSim.querySelector('.option-check') : null;
-        if (optCloudCheck) optCloudCheck.textContent = '';
-        if (optSimCheck) optSimCheck.textContent = '✓';
       }
-    }
-
-    if (optionCloud) {
-      optionCloud.addEventListener('click', function () {
-        updateEngineMode('cloud');
-      });
-    }
-    if (optionSim) {
-      optionSim.addEventListener('click', function () {
-        updateEngineMode('sim');
+      document.querySelectorAll('.engine-option').forEach(function (opt) {
+        var check = opt.querySelector('.option-check');
+        if (check) check.textContent = opt.classList.contains('active') ? '✓' : '';
       });
     }
 
-    // Load initial selection
-    var savedEngineMode = localStorage.getItem('tribe_engine_mode') || 'cloud';
-    updateEngineMode(savedEngineMode);
+    if (optionCloud) optionCloud.addEventListener('click', function () { updateEngineMode('cloud'); });
+    if (optionSim) optionSim.addEventListener('click', function () { updateEngineMode('sim'); });
 
-    // Settings overrides drawer trigger
+    updateEngineMode(localStorage.getItem('tribe_engine_mode') || 'cloud');
+    setStimulusMode(localStorage.getItem('tribe_stimulus_mode') || 'video');
+
     var serverStatus = $('server-status');
     var drawer = $('settings-drawer');
     var drawerClose = $('btn-drawer-close');
-
     if (serverStatus && drawer) {
       serverStatus.style.cursor = 'pointer';
-      serverStatus.addEventListener('click', function () {
-        drawer.classList.toggle('active');
-      });
+      serverStatus.addEventListener('click', function () { drawer.classList.toggle('active'); });
     }
     if (drawerClose && drawer) {
-      drawerClose.addEventListener('click', function () {
-        drawer.classList.remove('active');
-      });
+      drawerClose.addEventListener('click', function () { drawer.classList.remove('active'); });
     }
   }
 
@@ -386,11 +460,11 @@
     }
 
     if (mediaType === 'unknown') {
-      alert('Unsupported file type. Please attach a video, image, or audio file.');
+      alert('Unsupported file type for neural scan. Use video, image, or audio.');
       return;
     }
 
-    // Single staged file at a time
+    setStimulusMode(mediaType);
     stagedFiles = [{ file: file, type: mediaType }];
     renderStagedFiles();
     toggleSendButton();
@@ -434,13 +508,146 @@
     if (!sendBtn || !textarea) return;
 
     var text = textarea.value.trim();
-    if (text.length > 0 || stagedFiles.length > 0) {
-      sendBtn.classList.remove('disabled');
-      sendBtn.disabled = false;
-    } else {
-      sendBtn.classList.add('disabled');
-      sendBtn.disabled = true;
+    var hasInput = text.length > 0 || stagedFiles.length > 0;
+    sendBtn.classList.toggle('disabled', !hasInput);
+    sendBtn.disabled = !hasInput;
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function scrollToBottom() {
+    var scroller = $('chat-scroller');
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  }
+
+  function buildThinkingHTML(suffix) {
+    return '<div class="thinking-tracker" id="thinking-tracker' + suffix + '">' +
+      '<div class="thinking-header"><span class="thinking-icon">🧠</span> Mapping cortical response…</div>' +
+      '<div class="thinking-stepper">' +
+        '<div class="think-step" id="step-ingest' + suffix + '">Ingest stimulus</div>' +
+        '<div class="think-step" id="step-visual' + suffix + '">Visual feature extraction</div>' +
+        '<div class="think-step" id="step-audio' + suffix + '">Audio prosody analysis</div>' +
+        '<div class="think-step" id="step-text' + suffix + '">Language & semantics</div>' +
+        '<div class="think-step" id="step-mapping' + suffix + '">Network parcellation</div>' +
+        '<div class="think-step" id="step-scoring' + suffix + '">AIM virality scoring</div>' +
+      '</div>' +
+      '<div class="thinking-progress"><div class="thinking-progress-bar" id="progress-bar-fill' + suffix + '" style="width:5%"></div></div>' +
+      '<div class="thinking-pct" id="progress-pct' + suffix + '">0%</div>' +
+    '</div>';
+  }
+
+  function buildReportHTML(suffix) {
+    return '<div class="report-root hidden" id="report-container' + suffix + '">' +
+      '<div class="tldr-banner"><div class="tldr-header">Neural read · <span id="tldr-tag' + suffix + '">—</span></div><p class="tldr-body" id="tldr-body' + suffix + '"></p></div>' +
+      '<div class="score-overview-block">' +
+        '<div class="score-hero-card">' +
+          '<div class="score-badge" id="percentile-value' + suffix + '">—</div>' +
+          '<div class="score-num-display"><span class="score-big-val" id="score-hero-value' + suffix + '">0</span><span class="score-total-val">/100</span></div>' +
+          '<p class="score-tagline" id="score-tag-line' + suffix + '"></p>' +
+          '<p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">Closest archetype: <strong id="archetype-match-name' + suffix + '">—</strong> <span id="archetype-match-ref' + suffix + '"></span></p>' +
+          '<div class="aim-mini-grid">' +
+            '<div class="mini-stat-item">NAcc onset<span class="mini-stat-val" id="aim-mini-nacc' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item">AIns aversion<span class="mini-stat-val" id="aim-mini-ains' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item">DMN self-ref<span class="mini-stat-val" id="aim-mini-mpfc' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item">Language<span class="mini-stat-val" id="aim-mini-pcc' + suffix + '">—</span></div>' +
+          '</div>' +
+          '<div style="margin-top:1rem;padding-top:0.75rem;border-top:1px dashed rgba(0,0,0,0.06)">' +
+            '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;color:var(--clr-violet);margin-bottom:0.25rem">Biggest lever</div>' +
+            '<div style="font-size:0.88rem;font-weight:700" id="lever-title' + suffix + '"></div>' +
+            '<div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.45" id="lever-body' + suffix + '"></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gauge-visual-card">' +
+          '<div class="gauge-svg-container" style="position:relative">' +
+            '<svg viewBox="0 0 120 70" width="140" height="90"><path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="8" stroke-linecap="round"/><path id="gauge-foreground' + suffix + '" d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="url(#gaugeGrad' + suffix + ')" stroke-width="8" stroke-linecap="round" stroke-dasharray="345.5" stroke-dashoffset="345.5"/><defs><linearGradient id="gaugeGrad' + suffix + '"><stop offset="0%" stop-color="#1a73e8"/><stop offset="100%" stop-color="#7c4dff"/></linearGradient></defs></svg>' +
+            '<div class="gauge-pct-center"><span id="virality-score-value' + suffix + '">0</span></div>' +
+          '</div>' +
+          '<div class="gauge-label">Grade <span id="virality-grade' + suffix + '">—</span></div>' +
+          '<p style="font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:0.35rem" id="virality-label' + suffix + '"></p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="brain-visualizer-block">' +
+        '<div class="brain-map-wrapper" id="brain-map-container' + suffix + '"></div>' +
+        '<div class="brain-info-panel">' +
+          '<div class="active-roi-card"><div class="active-roi-header"><span class="active-roi-name" id="roi-active-name' + suffix + '">Select a network</span><span class="active-roi-val" id="roi-active-value' + suffix + '">—</span></div><p class="active-roi-desc" id="roi-active-desc' + suffix + '">Click a parcellation node to inspect activation.</p></div>' +
+          '<div id="region-list' + suffix + '"></div>' +
+          '<div id="network-legend' + suffix + '" style="margin-top:0.5rem"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="raw-bars-container" id="network-bars' + suffix + '"></div>' +
+      '<div style="background:#f8fafc;border-radius:12px;padding:1rem">' +
+        '<div class="report-section-title">AIM Breakdown</div>' +
+        '<div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.78rem">' +
+          '<div>NAcc reward <span id="aim-nacc-value' + suffix + '">—</span><div style="height:6px;background:rgba(0,0,0,0.04);border-radius:99px;margin-top:4px"><div id="aim-nacc-bar' + suffix + '" style="height:100%;width:0;background:#ec4899;border-radius:99px;transition:width 0.8s"></div></div></div>' +
+          '<div>AIns aversion <span id="aim-ains-value' + suffix + '">—</span><div style="height:6px;background:rgba(0,0,0,0.04);border-radius:99px;margin-top:4px"><div id="aim-ains-bar' + suffix + '" style="height:100%;width:0;background:#ef4444;border-radius:99px;transition:width 0.8s"></div></div></div>' +
+          '<div>Sustained engagement <span id="aim-engagement-value' + suffix + '">—</span><div style="height:6px;background:rgba(0,0,0,0.04);border-radius:99px;margin-top:4px"><div id="aim-engagement-bar' + suffix + '" style="height:100%;width:0;background:#22c55e;border-radius:99px;transition:width 0.8s"></div></div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="timeline-block hidden" id="timeline-section' + suffix + '"><div class="report-section-title">Temporal dynamics</div><div class="timeline-canvas-container" id="timeline-canvas-wrapper' + suffix + '"><canvas class="timeline-canvas" id="timeline-canvas' + suffix + '"></canvas><div class="hidden" id="timeline-tooltip' + suffix + '" style="position:absolute;background:rgba(0,0,0,0.85);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;pointer-events:none"></div></div><div id="timeline-legend' + suffix + '"></div><div class="timeline-annotations" id="timeline-annotations' + suffix + '"></div></div>' +
+      '<div class="hidden" id="evidence-section' + suffix + '"><div class="report-section-title">Neural evidence</div><div id="evidence-grid' + suffix + '" style="display:grid;gap:0.75rem"></div></div>' +
+      '<div class="hidden" id="archetype-section' + suffix + '"><div class="report-section-title">Archetype benchmark</div><div id="archetype-table' + suffix + '" style="display:flex;flex-direction:column;gap:0.4rem"></div></div>' +
+      '<div class="hidden" id="tips-section' + suffix + '"><div class="report-section-title">Optimization tips · <span id="headroom-value' + suffix + '">+0pts</span> headroom</div><div id="tips-grid' + suffix + '" style="display:flex;flex-direction:column;gap:0.6rem"></div></div>' +
+      '<div class="insights-block hidden" id="insights-section' + suffix + '"><div class="report-section-title">Creator insights</div><div class="insights-list" id="insights-grid' + suffix + '"></div></div>' +
+      '<div class="hidden" id="methodology-section' + suffix + '" style="font-size:0.72rem;color:var(--text-muted);line-height:1.5;padding:0.5rem 0">Activations mapped via HCP MMP 1.0 parcellation on fsaverage5. Virality scored with Knutson AIM: weighted NAcc onset (1.6×), minus AIns aversion, plus sustained LANG/STS/FFA engagement.</div>' +
+    '</div>';
+  }
+
+  function buildAIMessageHTML(suffix) {
+    return '<div class="message-content">' + buildThinkingHTML(suffix) + buildReportHTML(suffix) + '</div>';
+  }
+
+  async function submitQuery() {
+    var textarea = $('chat-textarea');
+    var text = textarea ? textarea.value.trim() : '';
+    var hasFile = stagedFiles.length > 0;
+    if (!text && !hasFile) return;
+
+    var mediaType = hasFile ? stagedFiles[0].type : 'text';
+    var input = hasFile ? stagedFiles[0].file : text;
+    var textPrompt = text;
+
+    var app = $('app-container');
+    if (app) app.classList.remove('state-landing');
+    if (app) app.classList.add('state-chat');
+
+    messageCounter += 1;
+    var suffix = '-msg' + messageCounter;
+    var thread = $('chat-messages');
+    if (!thread) return;
+
+    var userMsg = document.createElement('div');
+    userMsg.className = 'chat-message user';
+    var userHtml = '<div class="message-content">';
+    if (hasFile) {
+      var icon = stagedFiles[0].type === 'video' ? '🎬' : (stagedFiles[0].type === 'image' ? '🖼️' : '🎵');
+      userHtml += '<div class="message-file-badge"><span>' + icon + '</span> ' + escapeHtml(stagedFiles[0].file.name) + '</div>';
     }
+    if (text) userHtml += '<div class="message-text">' + escapeHtml(text) + '</div>';
+    userHtml += '</div>';
+    userMsg.innerHTML = userHtml;
+    thread.appendChild(userMsg);
+
+    var aiMsg = document.createElement('div');
+    aiMsg.className = 'chat-message ai';
+    aiMsg.innerHTML = '<div class="ai-avatar">✦</div>' + buildAIMessageHTML(suffix);
+    thread.appendChild(aiMsg);
+
+    if (textarea) {
+      textarea.value = '';
+      textarea.style.height = 'auto';
+    }
+    stagedFiles = [];
+    renderStagedFiles();
+    toggleSendButton();
+    scrollToBottom();
+
+    await analyzeContent(input, mediaType, suffix, textPrompt);
   }
 
   // ═══════════════════════════════════════════════════════════════
