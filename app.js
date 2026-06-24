@@ -144,116 +144,39 @@
 
   var MODALITY_CONFIG = {
     video: {
-      icon: '🎬',
       title: 'Drop video stimulus here',
-      hint: 'MP4, MOV, WebM · maps V1, FFA, EBA, STS, NAcc onset',
+      hint: 'MP4, MOV, WebM',
       accept: 'video/*',
     },
     audio: {
-      icon: '🎵',
       title: 'Drop audio stimulus here',
-      hint: 'MP3, WAV, FLAC · maps STS prosody, NAcc reward bursts, AIns aversion',
+      hint: 'MP3, WAV, FLAC',
       accept: 'audio/*',
     },
     image: {
-      icon: '🖼️',
       title: 'Drop thumbnail or frame here',
-      hint: 'JPG, PNG, WebP · maps V1 contrast, FFA faces, PPA scene composition',
+      hint: 'JPG, PNG, WebP',
       accept: 'image/*',
     },
     text: {
-      icon: '📝',
       title: '',
       hint: '',
       accept: '',
     },
   };
 
+  function mediaTypeLabel(type) {
+    if (type === 'video') return 'Video';
+    if (type === 'image') return 'Image';
+    if (type === 'audio') return 'Audio';
+    return 'File';
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // MODULE 1: PARTICLE BACKGROUND
   // ═══════════════════════════════════════════════════════════════
   function initParticles() {
-    var canvas = $('particle-canvas');
-    if (!canvas) return;
-    var ctx = canvas.getContext('2d');
-    var particles = [];
-    var PARTICLE_COUNT = 80;
-    var CONNECTION_DIST = 120;
-    var animId = null;
-
-    function resize() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-
-    function createParticle() {
-      var hue = 220 + Math.random() * 60; // 220-280
-      var sat = 60 + Math.random() * 20;  // 60-80
-      var lit = 50 + Math.random() * 20;  // 50-70
-      return {
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.6,
-        vy: (Math.random() - 0.5) * 0.6,
-        r: 1 + Math.random() * 2,
-        opacity: 0.1 + Math.random() * 0.4,
-        color: 'hsl(' + hue + ',' + sat + '%,' + lit + '%)',
-      };
-    }
-
-    function init() {
-      resize();
-      particles = [];
-      for (var i = 0; i < PARTICLE_COUNT; i++) {
-        particles.push(createParticle());
-      }
-    }
-
-    function tick() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (var i = 0; i < particles.length; i++) {
-        var p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        // Wrap edges
-        if (p.x < 0) p.x += canvas.width;
-        if (p.x > canvas.width) p.x -= canvas.width;
-        if (p.y < 0) p.y += canvas.height;
-        if (p.y > canvas.height) p.y -= canvas.height;
-      }
-      // Draw connections
-      for (var i = 0; i < particles.length; i++) {
-        for (var j = i + 1; j < particles.length; j++) {
-          var dx = particles[i].x - particles[j].x;
-          var dy = particles[i].y - particles[j].y;
-          var dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < CONNECTION_DIST) {
-            var alpha = (1 - dist / CONNECTION_DIST) * 0.15;
-            ctx.strokeStyle = 'rgba(139,92,246,' + alpha + ')';
-            ctx.lineWidth = 0.5;
-            ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.stroke();
-          }
-        }
-      }
-      // Draw particles
-      for (var i = 0; i < particles.length; i++) {
-        var p = particles[i];
-        ctx.globalAlpha = p.opacity;
-        ctx.fillStyle = p.color;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      animId = requestAnimationFrame(tick);
-    }
-
-    window.addEventListener('resize', resize);
-    init();
-    tick();
+    /* disabled — flat UI, no particle background */
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -266,7 +189,6 @@
     var cfg = MODALITY_CONFIG[mode] || MODALITY_CONFIG.video;
     var dropzone = $('stimulus-dropzone');
     var fileUploader = $('file-uploader');
-    var dropIcon = $('dropzone-icon');
     var dropTitle = $('dropzone-title');
     var dropHint = $('dropzone-hint');
 
@@ -280,7 +202,6 @@
       if (dropzone) dropzone.classList.add('hidden');
     } else {
       if (dropzone) dropzone.classList.remove('hidden');
-      if (dropIcon) dropIcon.textContent = cfg.icon;
       if (dropTitle) dropTitle.textContent = cfg.title;
       if (dropHint) dropHint.textContent = cfg.hint;
       if (fileUploader) fileUploader.accept = cfg.accept;
@@ -405,8 +326,7 @@
         if (optionCloud) optionCloud.classList.remove('active');
       }
       document.querySelectorAll('.engine-option').forEach(function (opt) {
-        var check = opt.querySelector('.option-check');
-        if (check) check.textContent = opt.classList.contains('active') ? '✓' : '';
+        opt.classList.toggle('selected', opt.classList.contains('active'));
       });
     }
 
@@ -465,14 +385,14 @@
     stagedFiles.forEach(function (sf, idx) {
       var pill = document.createElement('div');
       pill.className = 'file-pill';
-      var icon = sf.type === 'video' ? '🎬' : (sf.type === 'image' ? '🖼️' : '🎵');
-      pill.innerHTML = '<span class="attachment-icon">' + icon + '</span>' +
+      pill.innerHTML = '<span class="attachment-type">' + mediaTypeLabel(sf.type) + '</span>' +
         '<span class="attachment-name">' + escapeHtml(sf.file.name) + '</span>';
 
       var btnRemove = document.createElement('button');
       btnRemove.className = 'btn-pill-remove';
       btnRemove.type = 'button';
-      btnRemove.textContent = '✕';
+      btnRemove.setAttribute('aria-label', 'Remove file');
+      btnRemove.textContent = 'Remove';
       btnRemove.addEventListener('click', function (e) {
         e.stopPropagation();
         stagedFiles.splice(idx, 1);
@@ -539,10 +459,9 @@
 
     if (hasFiles) {
       var sf = stagedFiles[0];
-      var icon = sf.type === 'video' ? '🎬' : (sf.type === 'image' ? '🖼️' : '🎵');
       var badge = document.createElement('div');
       badge.className = 'message-file-badge';
-      badge.innerHTML = '<span>' + icon + '</span><span>' + escapeHtml(sf.file.name) + '</span>';
+      badge.innerHTML = '<span>' + mediaTypeLabel(sf.type) + '</span><span>' + escapeHtml(sf.file.name) + '</span>';
       userContent.appendChild(badge);
     }
 
@@ -561,14 +480,14 @@
 
     var avatar = document.createElement('div');
     avatar.className = 'ai-avatar';
-    avatar.textContent = '✦';
+    avatar.setAttribute('aria-hidden', 'true');
     aiMsg.appendChild(avatar);
 
     var aiContent = document.createElement('div');
     aiContent.className = 'message-content';
 
     aiContent.innerHTML = '<div class="thinking-tracker" id="thinking-tracker' + suffix + '">' +
-      '<div class="thinking-header"><span class="thinking-icon">🧠</span> Analyzing neural response…</div>' +
+      '<div class="thinking-header">Analyzing neural response</div>' +
       '<div class="thinking-stepper">' +
         '<div class="think-step" id="step-ingest' + suffix + '">Ingesting Media</div>' +
         '<div class="think-step" id="step-visual' + suffix + '">Visual Features</div>' +
@@ -587,7 +506,7 @@
       '</div>' +
       '<div class="score-overview-block">' +
         '<div class="score-hero-card">' +
-          '<div class="report-section-title">⚡ Virality Forecast</div>' +
+          '<div class="report-section-title">Virality Forecast</div>' +
           '<div class="score-num-display">' +
             '<span class="score-big-val" id="score-hero-value' + suffix + '">—</span>' +
             '<span class="score-total-val">/ 100</span>' +
@@ -632,7 +551,7 @@
         '</div>' +
         '<div class="brain-info-panel">' +
           '<div class="active-roi-card">' +
-            '<div class="report-section-title" style="font-size:0.85rem;">🧬 Click a region</div>' +
+            '<div class="report-section-title" style="font-size:0.85rem;">Click a region</div>' +
             '<div class="active-roi-header">' +
               '<span class="active-roi-name" id="roi-active-name' + suffix + '">Select a network</span>' +
               '<span class="active-roi-val" id="roi-active-value' + suffix + '">—</span>' +
@@ -643,33 +562,33 @@
         '</div>' +
       '</div>' +
       '<div class="raw-bars-container">' +
-        '<div class="report-section-title">📊 Network Activation Bars</div>' +
+        '<div class="report-section-title">Network Activation Bars</div>' +
         '<div id="network-bars' + suffix + '"></div>' +
       '</div>' +
       '<div class="raw-bars-container">' +
-        '<div class="report-section-title">🗂️ Region Activation Scores</div>' +
+        '<div class="report-section-title">Region Activation Scores</div>' +
         '<div id="region-list' + suffix + '"></div>' +
       '</div>' +
       '<div class="raw-bars-container">' +
-        '<div class="report-section-title">🎯 AIM Decomposition</div>' +
+        '<div class="report-section-title">AIM Decomposition</div>' +
         '<div style="display:flex; flex-direction:column; gap:0.65rem;">' +
           '<div class="raw-bar-row">' +
             '<div class="raw-bar-meta"><span class="raw-bar-label">NAcc ↑ Positive Arousal</span><span id="aim-nacc-value' + suffix + '">—</span></div>' +
-            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-nacc-bar' + suffix + '" style="background:linear-gradient(90deg,#ec4899,#f59e0b);"></div></div>' +
+            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-nacc-bar' + suffix + '" style="background:#ec4899;"></div></div>' +
           '</div>' +
           '<div class="raw-bar-row">' +
             '<div class="raw-bar-meta"><span class="raw-bar-label">AIns ↓ Negative Affect</span><span id="aim-ains-value' + suffix + '">—</span></div>' +
-            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-ains-bar' + suffix + '" style="background:linear-gradient(90deg,#ef4444,#f59e0b);"></div></div>' +
+            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-ains-bar' + suffix + '" style="background:#ef4444;"></div></div>' +
           '</div>' +
           '<div class="raw-bar-row">' +
             '<div class="raw-bar-meta"><span class="raw-bar-label">Sustained Engagement</span><span id="aim-engagement-value' + suffix + '">—</span></div>' +
-            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-engagement-bar' + suffix + '" style="background:linear-gradient(90deg,#22c55e,#14b8a6);"></div></div>' +
+            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-engagement-bar' + suffix + '" style="background:#22c55e;"></div></div>' +
           '</div>' +
         '</div>' +
         '<p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Onset weighting: 1.6× for first 4 seconds per Knutson et al. (2020)</p>' +
       '</div>' +
       '<div class="timeline-block hidden" id="timeline-section' + suffix + '">' +
-        '<div class="report-section-title">📈 Engagement Timeline</div>' +
+        '<div class="report-section-title">Engagement Timeline</div>' +
         '<div class="timeline-canvas-container" id="timeline-canvas-wrapper' + suffix + '">' +
           '<canvas id="timeline-canvas' + suffix + '" class="timeline-canvas"></canvas>' +
           '<div class="hidden" id="timeline-tooltip' + suffix + '" style="position:absolute;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:10;"></div>' +
@@ -678,27 +597,27 @@
         '<div class="timeline-annotations" id="timeline-annotations' + suffix + '"></div>' +
       '</div>' +
       '<div class="hidden" id="evidence-section' + suffix + '">' +
-        '<div class="report-section-title">🔬 What the Brain Is Telling Us</div>' +
+        '<div class="report-section-title">What the Brain Is Telling Us</div>' +
         '<div id="evidence-grid' + suffix + '" style="display:flex; flex-direction:column; gap:0.65rem;"></div>' +
       '</div>' +
       '<div class="hidden" id="archetype-section' + suffix + '">' +
-        '<div class="report-section-title">🏆 Benchmark vs. Viral Archetypes</div>' +
+        '<div class="report-section-title">Benchmark vs. Viral Archetypes</div>' +
         '<div id="archetype-table' + suffix + '" style="display:flex; flex-direction:column; gap:0.45rem;"></div>' +
       '</div>' +
       '<div class="hidden" id="tips-section' + suffix + '">' +
-        '<div class="report-section-title">💡 Tips &amp; Recommendations</div>' +
-        '<div style="display:inline-flex; align-items:center; gap:0.5rem; background:rgba(124,77,255,0.06); border-radius:var(--radius-pill); padding:0.3rem 0.8rem; font-size:0.8rem; font-weight:600; color:var(--clr-violet); margin-bottom:0.75rem;"><span>Headroom</span><span id="headroom-value' + suffix + '">—</span></div>' +
+        '<div class="report-section-title">Tips and Recommendations</div>' +
+        '<div class="headroom-badge"><span>Headroom</span><span id="headroom-value' + suffix + '">—</span></div>' +
         '<div id="tips-grid' + suffix + '" style="display:flex; flex-direction:column; gap:0.65rem;"></div>' +
       '</div>' +
       '<div class="hidden" id="insights-section' + suffix + '">' +
-        '<div class="report-section-title">🧭 Creator Insights</div>' +
+        '<div class="report-section-title">Creator Insights</div>' +
         '<div id="insights-grid' + suffix + '" style="display:grid; grid-template-columns:1fr; gap:0.85rem;"></div>' +
       '</div>' +
       '<div class="hidden" id="methodology-section' + suffix + '">' +
-        '<div class="report-section-title" style="margin-bottom:0.35rem;">📜 How the Score Is Built</div>' +
+        '<div class="report-section-title" style="margin-bottom:0.35rem;">How the Score Is Built</div>' +
         '<p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.55; margin-bottom:0.5rem;">We extract trimodal features from your content — visual frames at 1 Hz, audio energy via Web Audio, and caption text — then map them to nine canonical brain networks defined by Meta\'s TRIBE v2 atlas.</p>' +
         '<p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.55; margin-bottom:0.5rem;">The virality score follows the Knutson lab AIM framework: positive arousal at video onset (NAcc↑) and low negative-affect signal (AIns↓) are the only neural measures that scaled out-of-sample to YouTube view counts.</p>' +
-        '<div style="background:rgba(219,68,55,0.04); border:1px solid rgba(219,68,55,0.1); border-radius:var(--radius-md); padding:0.85rem; font-size:0.78rem; color:var(--text-secondary); line-height:1.45;"><strong>Disclaimer.</strong> This is an in-silico simulation, not a clinical fMRI scan. For research and creative directional use only.</div>' +
+        '<div class="methodology-disclaimer"><strong>Disclaimer.</strong> This is an in-silico simulation, not a clinical fMRI scan. For research and creative directional use only.</div>' +
       '</div>' +
     '</div>';
 
@@ -1530,11 +1449,11 @@
         if (scoreValueEl) scoreValueEl.textContent = score;
         if (gradeEl) gradeEl.textContent = grade;
         var labels = {
-          S: '🔥 Exceptional viral potential — your hook is neuroscience-perfect',
-          A: '🚀 Strong viral signal — NAcc onset is powerful',
-          B: '✅ Good engagement potential — consider strengthening the hook',
-          C: '⚡ Moderate signal — the opening needs more punch',
-          D: '💡 Low signal — rethink the first 4 seconds entirely',
+          S: 'Exceptional viral potential — your hook is neuroscience-perfect',
+          A: 'Strong viral signal — NAcc onset is powerful',
+          B: 'Good engagement potential — consider strengthening the hook',
+          C: 'Moderate signal — the opening needs more punch',
+          D: 'Low signal — rethink the first 4 seconds entirely',
         };
         if (labelEl) labelEl.textContent = labels[grade] || '';
       }
@@ -1739,19 +1658,19 @@
     var naccVal = viralityResult.onsetNAcc;
     if (naccVal > 0.65) {
       insights.push({
-        icon: '🎯', tag: 'Hook', color1: '#ec4899', color2: '#f59e0b',
+        tag: 'Hook', color1: '#ec4899', color2: '#f59e0b',
         title: 'Powerful Hook Detected',
         body: 'Your hook is strong — NAcc spikes at ' + (naccVal * 100).toFixed(1) + '% in the first 4 seconds, signaling high anticipatory reward.',
       });
     } else if (naccVal < 0.4) {
       insights.push({
-        icon: '⚠️', tag: 'Hook', color1: '#ef4444', color2: '#f59e0b',
+tag: 'Hook', color1: '#ef4444', color2: '#f59e0b',
         title: 'Weak Opening Hook',
         body: 'Your opening lacks punch — NAcc activation is only ' + (naccVal * 100).toFixed(1) + '%. Add a visual surprise, bold color, or upbeat audio in the first 2 seconds.',
       });
     } else {
       insights.push({
-        icon: '💡', tag: 'Hook', color1: '#f59e0b', color2: '#22c55e',
+tag: 'Hook', color1: '#f59e0b', color2: '#22c55e',
         title: 'Moderate Hook Strength',
         body: 'Moderate hook strength at ' + (naccVal * 100).toFixed(1) + '%. Consider adding a pattern interrupt or emotional trigger in the first 4 seconds.',
       });
@@ -1761,19 +1680,19 @@
     var ainsVal = viralityResult.onsetAIns;
     if (ainsVal < 0.3) {
       insights.push({
-        icon: '✅', tag: 'Affect', color1: '#22c55e', color2: '#14b8a6',
+tag: 'Affect', color1: '#22c55e', color2: '#14b8a6',
         title: 'Low Negative-Affect Signal',
         body: 'Low negative-affect signal — viewers won\'t click away. This is ideal per the AIM framework.',
       });
     } else if (ainsVal > 0.55) {
       insights.push({
-        icon: '🚨', tag: 'Affect', color1: '#ef4444', color2: '#ec4899',
+tag: 'Affect', color1: '#ef4444', color2: '#ec4899',
         title: 'High Anterior Insula Activation',
-        body: '⚠️ High anterior insula activation (' + (ainsVal * 100).toFixed(1) + '%) in the opening. Reduce jarring cuts, sudden loudness, or aversive imagery.',
+        body: 'High anterior insula activation (' + (ainsVal * 100).toFixed(1) + '%) in the opening. Reduce jarring cuts, sudden loudness, or aversive imagery.',
       });
     } else {
       insights.push({
-        icon: '🔍', tag: 'Affect', color1: '#f59e0b', color2: '#ef4444',
+tag: 'Affect', color1: '#f59e0b', color2: '#ef4444',
         title: 'Moderate Negative Affect',
         body: 'AIns is moderate. Review your opening for any unintentionally negative elements.',
       });
@@ -1782,7 +1701,7 @@
     // 3. Face Engagement
     if (summary.FFA > 0.5) {
       insights.push({
-        icon: '👤', tag: 'Visual', color1: '#8b5cf6', color2: '#3b82f6',
+tag: 'Visual', color1: '#8b5cf6', color2: '#3b82f6',
         title: 'Strong Face Presence',
         body: 'Strong face presence detected (FFA=' + (summary.FFA * 100).toFixed(1) + '%). Faces are one of the most attention-capturing features — leverage close-ups and direct eye contact.',
       });
@@ -1791,7 +1710,7 @@
     // 4. Scene Richness
     if (summary.PPA > 0.5) {
       insights.push({
-        icon: '🏞️', tag: 'Visual', color1: '#06b6d4', color2: '#22c55e',
+tag: 'Visual', color1: '#06b6d4', color2: '#22c55e',
         title: 'Rich Environmental Detail',
         body: 'Rich environmental detail (PPA=' + (summary.PPA * 100).toFixed(1) + '%). Your scene composition activates the parahippocampal place area — this draws viewers into the setting.',
       });
@@ -1800,7 +1719,7 @@
     // 5. Language Depth
     if (summary.LANG > 0.5) {
       insights.push({
-        icon: '📝', tag: 'Language', color1: '#f59e0b', color2: '#ec4899',
+tag: 'Language', color1: '#f59e0b', color2: '#ec4899',
         title: 'Strong Syntactic Depth',
         body: 'Your script has strong syntactic depth (Language=' + (summary.LANG * 100).toFixed(1) + '%), engaging Broca\'s and Wernicke\'s areas. This keeps audiences cognitively invested.',
       });
@@ -1809,7 +1728,7 @@
     // 6. Social/Self-Reference
     if (summary.DMN > 0.5) {
       insights.push({
-        icon: '🧠', tag: 'Social', color1: '#22c55e', color2: '#3b82f6',
+tag: 'Social', color1: '#22c55e', color2: '#3b82f6',
         title: 'High Self-Referential Content',
         body: 'High self-referential content (DMN=' + (summary.DMN * 100).toFixed(1) + '%). Personal pronouns and social language activate the default mode network, making viewers relate to your content.',
       });
@@ -1818,7 +1737,7 @@
     // 7. Motion Energy
     if (summary.EBA > 0.5) {
       insights.push({
-        icon: '🏃', tag: 'Motion', color1: '#a855f7', color2: '#ec4899',
+tag: 'Motion', color1: '#a855f7', color2: '#ec4899',
         title: 'High Motion Detected',
         body: 'High motion detected (EBA=' + (summary.EBA * 100).toFixed(1) + '%). Dynamic movement activates the extrastriate body area, keeping visual attention locked.',
       });
@@ -1827,7 +1746,7 @@
     // 8. Audio Engagement
     if (summary.STS > 0.5) {
       insights.push({
-        icon: '🎧', tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
+tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
         title: 'Strong Auditory Engagement',
         body: 'Strong auditory engagement (STS=' + (summary.STS * 100).toFixed(1) + '%). Your audio has rich prosody that activates the superior temporal sulcus — critical for storytelling.',
       });
@@ -1836,12 +1755,7 @@
     // Append beautiful flex cards
     insights.forEach(function (ins) {
       var card = document.createElement('div');
-      card.className = 'insight-card glass-card';
-
-      var iconDiv = document.createElement('div');
-      iconDiv.className = 'insight-icon';
-      iconDiv.style.background = 'linear-gradient(135deg, ' + ins.color1 + ', ' + ins.color2 + ')';
-      iconDiv.textContent = ins.icon;
+      card.className = 'insight-card';
 
       var tag = document.createElement('span');
       tag.className = 'insight-tag';
@@ -1855,7 +1769,6 @@
       body.className = 'insight-body';
       body.textContent = ins.body;
 
-      card.appendChild(iconDiv);
       card.appendChild(tag);
       card.appendChild(title);
       card.appendChild(body);
@@ -2110,7 +2023,8 @@
     evidence.forEach(function (ev, i) {
       var card = document.createElement('div');
       card.className = 'evidence-card';
-      card.style.cssText = 'background:#ffffff; border:1px solid rgba(0,0,0,0.05); border-left:4px solid ' + ev.color + '; border-radius:var(--radius-md); padding:1rem; display:flex; flex-direction:column; gap:4px;';
+      card.className = 'evidence-card';
+      card.style.cssText = 'border-left-color:' + ev.color + '; padding:1rem; display:flex; flex-direction:column; gap:4px;';
       card.style.animationDelay = (i * 0.1) + 's';
       card.innerHTML = '<div class="evidence-label" style="color:' + ev.color + '; font-size:0.68rem; font-weight:700; text-transform:uppercase;">' + ev.label + '</div>' +
         '<div class="evidence-title" style="font-size:0.88rem; font-weight:700; color:var(--text-primary);">' + ev.title + '</div>' +
@@ -2127,7 +2041,7 @@
     // Insert current content benchmark row
     var contentRow = document.createElement('div');
     contentRow.className = 'archetype-row current-content';
-    contentRow.style.cssText = 'background:rgba(124,77,255,0.06); border:1px solid rgba(124,77,255,0.15); border-radius:var(--radius-md); padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center;';
+    contentRow.style.cssText = 'border:1px solid rgba(0,0,0,0.08); padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center;';
     contentRow.innerHTML = '<div class="archetype-info"><div class="archetype-name" style="font-size:0.85rem; font-weight:700; color:var(--text-primary);">This Video</div><div class="archetype-desc" style="font-size:0.75rem; color:var(--text-muted);">(your analyzed content)</div></div><div class="archetype-score-badge" style="font-family:var(--font-mono); font-size:1.1rem; font-weight:800; color:var(--clr-violet);">' + viralityResult.score + '</div>';
     
     var inserted = false;
@@ -2138,7 +2052,7 @@
       }
       var row = document.createElement('div');
       row.className = 'archetype-row' + (arch === archMatch.closest ? ' active' : '');
-      row.style.cssText = 'border:1px solid rgba(0,0,0,0.03); border-radius:var(--radius-md); padding:0.6rem 1rem; display:flex; justify-content:space-between; align-items:center; background:#ffffff;';
+      row.style.cssText = 'border:1px solid rgba(0,0,0,0.08); padding:0.6rem 1rem; display:flex; justify-content:space-between; align-items:center; background:transparent;';
       if (arch === archMatch.closest) {
         row.style.borderColor = 'rgba(124,77,255,0.15)';
         row.style.background = 'rgba(124,77,255,0.02)';
@@ -2160,7 +2074,8 @@
     result.tips.forEach(function (tip, i) {
       var card = document.createElement('div');
       card.className = 'tip-card';
-      card.style.cssText = 'background:#ffffff; border:1px solid rgba(0,0,0,0.05); border-radius:var(--radius-md); padding:1rem; display:flex; gap:0.75rem;';
+      card.className = 'tip-card';
+      card.style.cssText = 'padding:1rem; display:flex; gap:0.75rem;';
       card.style.animationDelay = (i * 0.12) + 's';
       card.innerHTML = '<div class="tip-number" style="font-size:1.5rem; font-weight:800; color:var(--clr-violet); line-height:1;">' + tip.num + '</div>' +
         '<div class="tip-content" style="display:flex; flex-direction:column; gap:2px; flex-grow:1;">' +

@@ -14,12 +14,6 @@
 
   <!-- App Main State-driven Wrapper -->
   <div id="app-container" class="state-landing">
-    
-    <!-- Soft glowing light-blue/violet radial aura background -->
-    <div class="welcome-glow-aura" aria-hidden="true"></div>
-
-    <!-- Hidden particles canvas overlay for active brain waves -->
-    <canvas id="particle-canvas" aria-hidden="true"></canvas>
 
     <!-- Floating Top Bar (Invisible/minimalist, server status) -->
     <div class="top-bar">
@@ -69,7 +63,6 @@
             <div class="stimulus-dropzone" id="stimulus-dropzone">
               <input type="file" id="file-uploader" accept="video/*" hidden />
               <button type="button" class="dropzone-hit" id="btn-dropzone-browse">
-                <span class="dropzone-icon" id="dropzone-icon">🎬</span>
                 <span class="dropzone-title" id="dropzone-title">Drop video stimulus here</span>
                 <span class="dropzone-hint" id="dropzone-hint">MP4, MOV, WebM · maps V1, FFA, EBA, STS, NAcc onset</span>
                 <span class="dropzone-cta">Browse files</span>
@@ -87,13 +80,12 @@
             <div class="scan-action-left">
               <div class="engine-dropdown-container">
                 <button class="btn-engine-select" id="btn-engine-select" title="Inference engine" type="button">
-                  <span class="engine-icon" aria-hidden="true">⚡</span>
                   <span id="engine-display-label">TRIBE v2</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="12"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
                 <div class="engine-dropdown-menu hidden" id="engine-dropdown-menu">
                   <div class="engine-option active" id="option-cloud-run" data-mode="cloud">
-                    <span class="option-check">✓</span>
+                    <span class="option-check" aria-hidden="true"></span>
                     <div class="option-meta">
                       <span class="option-title">TRIBE v2 Cloud</span>
                       <span class="option-subtitle">Meta foundation model · full fMRI vertex prediction</span>
@@ -134,7 +126,7 @@
     <div class="settings-drawer" id="settings-drawer">
       <div class="drawer-header">
         <h3>Engine Override</h3>
-        <button class="btn-drawer-close" id="btn-drawer-close">✕</button>
+        <button class="btn-drawer-close" id="btn-drawer-close" type="button" aria-label="Close">Close</button>
       </div>
       <div class="drawer-content">
         <p class="drawer-description">Connect to a local server (http://localhost:8080) or your Google Cloud Run deployment.</p>
