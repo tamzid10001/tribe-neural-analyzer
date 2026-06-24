@@ -178,14 +178,6 @@ textarea {
   display: none;
 }
 
-#app-container.state-landing .landing-hero {
-  display: block;
-  opacity: 1;
-  text-align: center;
-  margin-bottom: 28px;
-  animation: fade-in-up 0.5s var(--ease-out) both;
-}
-
 #app-container.state-landing .composer-container {
   position: relative;
   bottom: auto;
@@ -208,14 +200,15 @@ textarea {
   transform: translate(-50%, -30%) scale(0.9);
 }
 
-#app-container.state-chat .landing-hero {
-  display: none !important;
-}
-
 #app-container.state-chat .chat-scroller {
   display: block;
   flex: 1;
   overflow-y: auto;
+  padding-bottom: 280px;
+}
+
+#app-container.state-chat .composer-container {
+  padding-bottom: 16px;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -281,54 +274,6 @@ textarea {
 .btn-settings-toggle:hover {
   background: rgba(0, 0, 0, 0.04);
   color: var(--clr-blue);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   MAIN HERO TITLE
-   ═══════════════════════════════════════════════════════════════ */
-.landing-hero {
-  width: 100%;
-  max-width: 800px;
-  padding: 0 20px;
-}
-
-.landing-eyebrow {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--clr-violet);
-  margin-bottom: 0.75rem;
-}
-
-.landing-title {
-  font-size: clamp(2rem, 5vw, 3.1rem);
-  font-weight: 500;
-  color: #1f1f1f;
-  letter-spacing: -0.03em;
-  line-height: 1.15;
-  margin-bottom: 0.85rem;
-}
-
-.landing-subtitle {
-  font-size: 1rem;
-  color: var(--text-muted);
-  font-weight: 400;
-  line-height: 1.55;
-  max-width: 520px;
-  margin: 0 auto;
-}
-
-#app-container.state-chat .composer-quick-scans {
-  display: none;
-}
-
-#app-container.state-chat .composer-container {
-  padding-bottom: 16px;
-}
-
-#app-container.state-chat .chat-scroller {
-  padding-bottom: 280px;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -890,31 +835,6 @@ textarea {
   margin: 0 auto;
 }
 
-.composer-quick-scans {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.45rem;
-  margin-bottom: 0.85rem;
-}
-
-.quick-scan-chip {
-  padding: 0.4rem 0.85rem;
-  border-radius: var(--radius-pill);
-  border: 1px solid rgba(124, 77, 255, 0.14);
-  background: rgba(255, 255, 255, 0.75);
-  color: var(--text-secondary);
-  font-size: 0.76rem;
-  font-weight: 600;
-  transition: background var(--transition-base), border-color var(--transition-base), color var(--transition-base);
-}
-
-.quick-scan-chip:hover {
-  background: rgba(124, 77, 255, 0.06);
-  border-color: rgba(124, 77, 255, 0.28);
-  color: var(--clr-violet);
-}
-
 .scan-composer {
   background: #ffffff;
   border: 1px solid rgba(124, 77, 255, 0.12);
@@ -929,66 +849,11 @@ textarea {
   box-shadow: 0 12px 48px rgba(124, 77, 255, 0.1);
 }
 
-.scan-composer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.85rem 1rem 0.65rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
-  background: linear-gradient(180deg, rgba(124,77,255,0.03), transparent);
-}
-
-.scan-composer-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 0;
-}
-
-.scan-brand-icon {
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.scan-brand-title {
-  display: block;
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.scan-brand-sub {
-  display: block;
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.network-coverage-strip {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 0.25rem;
-  max-width: 52%;
-}
-
-.net-chip {
-  font-family: var(--font-mono);
-  font-size: 0.58rem;
-  font-weight: 700;
-  padding: 0.15rem 0.35rem;
-  border-radius: 4px;
-  color: var(--net-color);
-  background: color-mix(in srgb, var(--net-color) 10%, white);
-  border: 1px solid color-mix(in srgb, var(--net-color) 22%, transparent);
-}
-
 .modality-tabs {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0;
-  padding: 0.5rem 0.75rem 0;
+  padding: 0.65rem 0.75rem 0;
 }
 
 .modality-tab {
@@ -1332,16 +1197,6 @@ textarea {
 }
 
 @media (max-width: 640px) {
-  .scan-composer-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .network-coverage-strip {
-    max-width: 100%;
-    justify-content: flex-start;
-  }
-
   .btn-scan {
     padding: 0.55rem 0.75rem;
   }

@@ -356,23 +356,6 @@
       });
     });
 
-    document.querySelectorAll('.quick-scan-chip').forEach(function (chip) {
-      chip.addEventListener('click', function () {
-        if (chip.getAttribute('data-mode')) {
-          setStimulusMode(chip.getAttribute('data-mode'));
-          if (fileUploader) fileUploader.click();
-          return;
-        }
-        var prompt = chip.getAttribute('data-prompt');
-        if (prompt && textarea) {
-          setStimulusMode('text');
-          textarea.value = prompt;
-          textarea.dispatchEvent(new Event('input'));
-          textarea.focus();
-        }
-      });
-    });
-
     if (btnSend) btnSend.addEventListener('click', submitQuery);
 
     var recognition = null;
