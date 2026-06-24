@@ -132,6 +132,17 @@
   var backendUrl = getDefaultBackendUrl();
   var backendToken = '';
 
+  function formatCloudHttpError(status, detail) {
+    if (status === 403) {
+      return 'Cloud Run requires public access or an OIDC token (403). ' +
+        'From your machine run: bash scripts/enable-public-cloud-run.sh';
+    }
+    if (status === 503) {
+      return 'TRIBE v2 model is not loaded on the server (503). Check Cloud Run logs.';
+    }
+    return 'Server returned error (' + status + '): ' + (detail || 'unknown');
+  }
+
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -2233,7 +2244,7 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
 
           if (!res.ok) {
             var errorText = await res.text();
-            throw new Error('Server returned error (' + res.status + '): ' + errorText);
+            throw new Error(formatCloudHttpError(res.status, errorText));
           }
 
           var serverData = await res.json();
@@ -2607,6 +2618,9 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
           statusDot.className = 'status-dot checking';
           statusText.textContent = 'Cloud Code: ' + res.status;
         }
+      } else if (res.status === 403) {
+        statusDot.className = 'status-dot offline';
+        statusText.textContent = 'Auth Required (403)';
       } else {
         statusDot.className = 'status-dot offline';
         statusText.textContent = 'Cloud Error (' + res.status + ')';
