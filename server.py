@@ -66,13 +66,6 @@ _model_lock = threading.Lock()
 _load_started = False
 _load_start_lock = threading.Lock()
 
-
-def _fallback_network_vectors():
-    return {
-        net_id: np.arange(i * 1000, (i + 1) * 1000)
-        for i, net_id in enumerate(NETWORK_ROIS.keys())
-    }
-
 # Canonical 9 brain networks and their neuroscientific HCP MMP 1.0 ROI mappings
 NETWORK_ROIS = {
     "V1": ["V1"],
@@ -82,9 +75,83 @@ NETWORK_ROIS = {
     "STS": ["STSda", "STSdp", "STSva", "STSvp"],
     "LANG": ["44", "45", "IFJa", "IFJp", "55b", "PSL", "STV", "TPOJ1", "TPOJ2", "TPOJ3"],
     "DMN": ["10r", "10v", "9m", "10d", "v23ab", "d23ab", "31pv", "31pd"],
-    "NAcc": ["10v", "OFC", "47m"],  # vmPFC and OFC as subcortical NAcc reward proxies on the cortical surface
-    "AIns": ["AI", "FOP1", "FOP2", "FOP3", "FOP4", "FOP5", "AVI"]   # Anterior Insula and Frontal Operculum regions
+    "NAcc": ["10v", "OFC", "47m"],
+    "AIns": ["AI", "FOP1", "FOP2", "FOP3", "FOP4", "FOP5", "AVI"],
 }
+
+
+def _patch_tribev2_whisperx_cpu():
+    """Patch TRIBE's whisperx call for CPU (float32) and preinstalled whisperx."""
+    import json
+    import subprocess
+    import tempfile
+    import tribev2.eventstransforms as et
+
+    @staticmethod
+    def _get_transcript_from_audio(wav_filename, language):
+        language_codes = dict(english="en", french="fr", spanish="es", dutch="nl", chinese="zh")
+        if language not in language_codes:
+            raise ValueError(f"Language {language} not supported")
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        compute_type = "float16" if device == "cuda" else "float32"
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            logger.info("Running whisperx...")
+            whisper_bin = shutil.which("whisperx") or "whisperx"
+            cmd = [
+                whisper_bin,
+                str(wav_filename),
+                "--model",
+                "large-v3",
+                "--language",
+                language_codes[language],
+                "--device",
+                device,
+                "--compute_type",
+                compute_type,
+                "--batch_size",
+                "8",
+                "--align_model",
+                "WAV2VEC2_ASR_LARGE_LV60K_960H" if language == "english" else "",
+                "--output_dir",
+                output_dir,
+                "--output_format",
+                "json",
+            ]
+            cmd = [c for c in cmd if c]
+            env = {k: v for k, v in os.environ.items() if k != "MPLBACKEND"}
+            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+            if result.returncode != 0:
+                raise RuntimeError(f"whisperx failed:\n{result.stderr}")
+
+            json_path = Path(output_dir) / f"{Path(wav_filename).stem}.json"
+            transcript = json.loads(json_path.read_text())
+
+            words = []
+            for i, segment in enumerate(transcript["segments"]):
+                sentence = segment["text"].replace('"', "")
+                for word in segment["words"]:
+                    if "start" not in word:
+                        continue
+                    words.append({
+                        "text": word["word"].replace('"', ""),
+                        "start": word["start"],
+                        "duration": word["end"] - word["start"],
+                        "sequence_id": i,
+                        "sentence": sentence,
+                    })
+
+            return pd.DataFrame(words)
+
+    et.ExtractWordsFromAudio._get_transcript_from_audio = _get_transcript_from_audio
+
+
+def _fallback_network_vectors():
+    return {
+        net_id: np.arange(i * 1000, (i + 1) * 1000)
+        for i, net_id in enumerate(NETWORK_ROIS.keys())
+    }
 
 def sigmoid_normalize(z_scores, k=1.0, center=0.0):
     """
@@ -186,6 +253,7 @@ def startup_event():
         if _load_started:
             return
         _load_started = True
+    _patch_tribev2_whisperx_cpu()
     _load_model_and_networks()
     if model_load_state == "ready":
         threading.Thread(target=_refine_network_vectors, daemon=True).start()

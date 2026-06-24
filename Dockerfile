@@ -41,6 +41,9 @@ RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /app/tri
 # Install tribev2 package in editable mode along with its plotting dependencies (nilearn, nibabel, etc.)
 RUN pip install -e "/app/tribev2_repo[plotting]"
 
+# Pre-install whisperx for CPU transcription (avoids uvx bootstrap + CUDA downloads at runtime)
+RUN uv tool install --python 3.11 whisperx
+
 # Copy pre-download caching script and application server code
 COPY pre_download.py /app/pre_download.py
 COPY server.py /app/server.py
