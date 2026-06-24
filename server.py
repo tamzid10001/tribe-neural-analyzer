@@ -54,6 +54,15 @@ NETWORK_VECTORS = {}
 model_load_state = "pending"
 model_load_error = None
 _model_lock = threading.Lock()
+_load_started = False
+_load_start_lock = threading.Lock()
+
+
+def _fallback_network_vectors():
+    return {
+        net_id: np.arange(i * 1000, (i + 1) * 1000)
+        for i, net_id in enumerate(NETWORK_ROIS.keys())
+    }
 
 # Canonical 9 brain networks and their neuroscientific HCP MMP 1.0 ROI mappings
 NETWORK_ROIS = {
@@ -110,7 +119,6 @@ def _load_model_and_networks():
     logger.info("Initializing TRIBE v2 Backend Server...")
 
     loaded_model = None
-    loaded_vectors = {}
 
     try:
         import torch
@@ -127,33 +135,39 @@ def _load_model_and_networks():
             model_load_error = str(e)
         return
 
-    try:
-        from tribev2.utils import get_hcp_roi_indices
-        logger.info("Mapping HCP MMP 1.0 cortical ROIs to network vertex vectors...")
-        for net_id, rois in NETWORK_ROIS.items():
-            try:
-                indices = get_hcp_roi_indices(rois, hemi="both", mesh="fsaverage5")
-                loaded_vectors[net_id] = indices
-                logger.info(f"Mapped {net_id} -> {len(indices)} vertices on fsaverage5.")
-            except Exception as ex:
-                logger.warning(f"Could not map ROIs {rois} for network {net_id}: {ex}")
-                idx = list(NETWORK_ROIS.keys()).index(net_id)
-                loaded_vectors[net_id] = np.arange(idx * 1000, (idx + 1) * 1000)
-    except Exception as e:
-        logger.error(f"Failed to load HCP parcellations: {e}")
-        for i, net_id in enumerate(NETWORK_ROIS.keys()):
-            loaded_vectors[net_id] = np.arange(i * 1000, (i + 1) * 1000)
-
     with _model_lock:
         model = loaded_model
-        NETWORK_VECTORS = loaded_vectors
+        NETWORK_VECTORS = _fallback_network_vectors()
         model_load_state = "ready"
         model_load_error = None
     logger.info("TRIBE v2 backend is ready.")
 
+    try:
+        from tribev2.utils import get_hcp_roi_indices
+        logger.info("Refining HCP MMP 1.0 cortical ROI mappings...")
+        refined_vectors = {}
+        for net_id, rois in NETWORK_ROIS.items():
+            try:
+                indices = get_hcp_roi_indices(rois, hemi="both", mesh="fsaverage5")
+                refined_vectors[net_id] = indices
+                logger.info(f"Mapped {net_id} -> {len(indices)} vertices on fsaverage5.")
+            except Exception as ex:
+                logger.warning(f"Could not map ROIs {rois} for network {net_id}: {ex}")
+                refined_vectors[net_id] = _fallback_network_vectors()[net_id]
+        with _model_lock:
+            NETWORK_VECTORS = refined_vectors
+        logger.info("ROI mapping refinement complete.")
+    except Exception as e:
+        logger.warning(f"ROI mapping refinement skipped: {e}")
+
 
 @app.on_event("startup")
 def startup_event():
+    global _load_started
+    with _load_start_lock:
+        if _load_started:
+            return
+        _load_started = True
     threading.Thread(target=_load_model_and_networks, daemon=True).start()
 
 
