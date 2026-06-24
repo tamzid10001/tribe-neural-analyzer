@@ -191,6 +191,9 @@
     var fileUploader = $('file-uploader');
     var dropTitle = $('dropzone-title');
     var dropHint = $('dropzone-hint');
+    var scriptRow = $('stimulus-script-row');
+    var textarea = $('chat-textarea');
+    var btnMic = $('btn-mic');
 
     document.querySelectorAll('.modality-tab').forEach(function (tab) {
       var isActive = tab.getAttribute('data-mode') === mode;
