@@ -2611,6 +2611,9 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
         if (data && data.status === 'ready') {
           statusDot.className = 'status-dot online';
           statusText.textContent = 'Cloud Online';
+        } else if (data && data.status === 'loading') {
+          statusDot.className = 'status-dot checking';
+          statusText.textContent = 'Model Loading...';
         } else if (data && data.status === 'loading_error') {
           statusDot.className = 'status-dot checking';
           statusText.textContent = 'Model Loading Error';

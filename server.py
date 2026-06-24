@@ -3,6 +3,7 @@ import sys
 import uuid
 import shutil
 import logging
+import threading
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -50,6 +51,9 @@ app.add_middleware(
 # Global variables to hold the loaded model and network ROI mappings
 model = None
 NETWORK_VECTORS = {}
+model_load_state = "pending"
+model_load_error = None
+_model_lock = threading.Lock()
 
 # Canonical 9 brain networks and their neuroscientific HCP MMP 1.0 ROI mappings
 NETWORK_ROIS = {
@@ -71,47 +75,62 @@ def sigmoid_normalize(z_scores, k=1.0, center=0.0):
     """
     return 1.0 / (1.0 + np.exp(-k * (z_scores - center)))
 
-@app.on_event("startup")
-def startup_event():
-    """
-    On startup, load the pretrained TRIBE v2 model and precalculate
-    the fsaverage5 surface mesh vertex indices for our 9 canonical networks.
-    """
-    global model, NETWORK_VECTORS
+def _load_model_and_networks():
+    """Load TRIBE v2 and ROI mappings in a background thread so /status responds immediately."""
+    global model, NETWORK_VECTORS, model_load_state, model_load_error
+
+    with _model_lock:
+        model_load_state = "loading"
+        model_load_error = None
+
     logger.info("Initializing TRIBE v2 Backend Server...")
-    
-    # 1. Load the model
+
+    loaded_model = None
+    loaded_vectors = {}
+
     try:
         import torch
         from tribev2 import TribeModel
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Loading TribeModel on device: {device}...")
-        model = TribeModel.from_pretrained("facebook/tribev2", cache_folder=str(CACHE_ROOT), device=device)
+        loaded_model = TribeModel.from_pretrained("facebook/tribev2", cache_folder=str(CACHE_ROOT), device=device)
         logger.info("TribeModel loaded successfully.")
     except Exception as e:
         logger.error(f"Critical error loading TribeModel: {e}")
-        # We don't crash the server startup, but /status and /analyze will check readiness
-        model = None
+        with _model_lock:
+            model = None
+            model_load_state = "loading_error"
+            model_load_error = str(e)
+        return
 
-    # 2. Map cortical parcellation ROIs to fsaverage5 vertex indices
     try:
         from tribev2.utils import get_hcp_roi_indices
         logger.info("Mapping HCP MMP 1.0 cortical ROIs to network vertex vectors...")
         for net_id, rois in NETWORK_ROIS.items():
             try:
                 indices = get_hcp_roi_indices(rois, hemi="both", mesh="fsaverage5")
-                NETWORK_VECTORS[net_id] = indices
+                loaded_vectors[net_id] = indices
                 logger.info(f"Mapped {net_id} -> {len(indices)} vertices on fsaverage5.")
             except Exception as ex:
                 logger.warning(f"Could not map ROIs {rois} for network {net_id}: {ex}")
-                # Safe fallback: assign a slice of vertices to prevent crashing
                 idx = list(NETWORK_ROIS.keys()).index(net_id)
-                NETWORK_VECTORS[net_id] = np.arange(idx * 1000, (idx + 1) * 1000)
+                loaded_vectors[net_id] = np.arange(idx * 1000, (idx + 1) * 1000)
     except Exception as e:
         logger.error(f"Failed to load HCP parcellations: {e}")
-        # Universal fallback for all networks
         for i, net_id in enumerate(NETWORK_ROIS.keys()):
-            NETWORK_VECTORS[net_id] = np.arange(i * 1000, (i + 1) * 1000)
+            loaded_vectors[net_id] = np.arange(i * 1000, (i + 1) * 1000)
+
+    with _model_lock:
+        model = loaded_model
+        NETWORK_VECTORS = loaded_vectors
+        model_load_state = "ready"
+        model_load_error = None
+    logger.info("TRIBE v2 backend is ready.")
+
+
+@app.on_event("startup")
+def startup_event():
+    threading.Thread(target=_load_model_and_networks, daemon=True).start()
 
 
 class StatusResponse(BaseModel):
@@ -126,7 +145,20 @@ def get_status():
     """
     Exposes server health, active device, and active networks mapping.
     """
-    if model is None:
+    with _model_lock:
+        state = model_load_state
+        vectors = dict(NETWORK_VECTORS)
+        current_model = model
+
+    if state == "loading":
+        return StatusResponse(
+            status="loading",
+            model="facebook/tribev2",
+            device="unknown",
+            networks_mapped=[]
+        )
+
+    if state == "loading_error" or current_model is None:
         return StatusResponse(
             status="loading_error",
             model="facebook/tribev2",
@@ -144,7 +176,7 @@ def get_status():
         status="ready",
         model="facebook/tribev2",
         device=device_str,
-        networks_mapped=list(NETWORK_VECTORS.keys())
+        networks_mapped=list(vectors.keys())
     )
 
 
@@ -157,8 +189,14 @@ async def analyze_content(
     Endpoint accepting text input or video/audio uploads, running actual 
     in-silico neuro fMRI prediction, and returning time-series network activation.
     """
-    if model is None:
-        raise HTTPException(status_code=503, detail="TribeModel is not loaded or initialization failed.")
+    with _model_lock:
+        if model_load_state != "ready" or model is None:
+            detail = "TribeModel is still loading. Retry shortly."
+            if model_load_state == "loading_error":
+                detail = "TribeModel is not loaded or initialization failed."
+            raise HTTPException(status_code=503, detail=detail)
+        active_model = model
+        active_vectors = dict(NETWORK_VECTORS)
     
     if file is None and (text is None or not text.strip()):
         raise HTTPException(status_code=400, detail="Either a file (video/audio) or text must be provided.")
@@ -220,18 +258,18 @@ async def analyze_content(
         # Construct Events DataFrame
         try:
             if media_type == "video":
-                df = model.get_events_dataframe(video_path=str(temp_file_path))
+                df = active_model.get_events_dataframe(video_path=str(temp_file_path))
             elif media_type == "audio":
-                df = model.get_events_dataframe(audio_path=str(temp_file_path))
+                df = active_model.get_events_dataframe(audio_path=str(temp_file_path))
             else:
-                df = model.get_events_dataframe(text_path=str(temp_file_path))
+                df = active_model.get_events_dataframe(text_path=str(temp_file_path))
         except Exception as e:
             logger.error(f"Failed to build events dataframe: {e}")
             raise HTTPException(status_code=500, detail=f"Failed to extract features or build events dataframe: {str(e)}")
 
         # Run TRIBE v2 Inference
         try:
-            preds, segments = model.predict(events=df, verbose=False)
+            preds, segments = active_model.predict(events=df, verbose=False)
             logger.info(f"Inference complete. Predictions shape: {preds.shape}") # (n_timesteps, 20484)
         except Exception as e:
             logger.error(f"Inference execution failed: {e}")
@@ -244,7 +282,7 @@ async def analyze_content(
         per_second_data = {}
         summary_data = {}
 
-        for net_id, vertex_indices in NETWORK_VECTORS.items():
+        for net_id, vertex_indices in active_vectors.items():
             # Extract activations at vertices for this network
             net_preds = preds[:, vertex_indices]
             # Mean activation across vertices for each timestep (shape: (n_timesteps,))
