@@ -127,9 +127,20 @@
   var stagedFiles = [];
   var stimulusMode = 'video';
   var engineMode = 'cloud';
+  var isAnalyzing = false;
+  var messageCounter = 0;
   var backendUrl = getDefaultBackendUrl();
   var backendToken = '';
-  var messageCounter = 0;
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
 
   var MODALITY_CONFIG = {
     video: {
@@ -482,13 +493,13 @@
 
     stagedFiles.forEach(function (sf, idx) {
       var pill = document.createElement('div');
-      pill.className = 'attachment-preview-pill';
+      pill.className = 'file-pill';
       var icon = sf.type === 'video' ? '🎬' : (sf.type === 'image' ? '🖼️' : '🎵');
       pill.innerHTML = '<span class="attachment-icon">' + icon + '</span>' +
-        '<span class="attachment-name">' + sf.file.name + '</span>';
-      
+        '<span class="attachment-name">' + escapeHtml(sf.file.name) + '</span>';
+
       var btnRemove = document.createElement('button');
-      btnRemove.className = 'btn-attachment-remove';
+      btnRemove.className = 'btn-pill-remove';
       btnRemove.type = 'button';
       btnRemove.textContent = '✕';
       btnRemove.addEventListener('click', function (e) {
@@ -508,135 +519,231 @@
     if (!sendBtn || !textarea) return;
 
     var text = textarea.value.trim();
-    var hasInput = text.length > 0 || stagedFiles.length > 0;
+    var hasInput = (text.length > 0 || stagedFiles.length > 0) && !isAnalyzing;
     sendBtn.classList.toggle('disabled', !hasInput);
     sendBtn.disabled = !hasInput;
   }
 
-  function escapeHtml(str) {
-    return String(str)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-  }
-
   function scrollToBottom() {
     var scroller = $('chat-scroller');
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    if (scroller) {
+      requestAnimationFrame(function () {
+        scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+      });
+    }
   }
 
-  function buildThinkingHTML(suffix) {
-    return '<div class="thinking-tracker" id="thinking-tracker' + suffix + '">' +
-      '<div class="thinking-header"><span class="thinking-icon">🧠</span> Mapping cortical response…</div>' +
-      '<div class="thinking-stepper">' +
-        '<div class="think-step" id="step-ingest' + suffix + '">Ingest stimulus</div>' +
-        '<div class="think-step" id="step-visual' + suffix + '">Visual feature extraction</div>' +
-        '<div class="think-step" id="step-audio' + suffix + '">Audio prosody analysis</div>' +
-        '<div class="think-step" id="step-text' + suffix + '">Language & semantics</div>' +
-        '<div class="think-step" id="step-mapping' + suffix + '">Network parcellation</div>' +
-        '<div class="think-step" id="step-scoring' + suffix + '">AIM virality scoring</div>' +
-      '</div>' +
-      '<div class="thinking-progress"><div class="thinking-progress-bar" id="progress-bar-fill' + suffix + '" style="width:5%"></div></div>' +
-      '<div class="thinking-pct" id="progress-pct' + suffix + '">0%</div>' +
-    '</div>';
-  }
+  function submitQuery() {
+    if (isAnalyzing) return;
 
-  function buildReportHTML(suffix) {
-    return '<div class="report-root hidden" id="report-container' + suffix + '">' +
-      '<div class="tldr-banner"><div class="tldr-header">Neural read · <span id="tldr-tag' + suffix + '">—</span></div><p class="tldr-body" id="tldr-body' + suffix + '"></p></div>' +
-      '<div class="score-overview-block">' +
-        '<div class="score-hero-card">' +
-          '<div class="score-badge" id="percentile-value' + suffix + '">—</div>' +
-          '<div class="score-num-display"><span class="score-big-val" id="score-hero-value' + suffix + '">0</span><span class="score-total-val">/100</span></div>' +
-          '<p class="score-tagline" id="score-tag-line' + suffix + '"></p>' +
-          '<p style="font-size:0.8rem;color:var(--text-muted);margin-bottom:0.5rem">Closest archetype: <strong id="archetype-match-name' + suffix + '">—</strong> <span id="archetype-match-ref' + suffix + '"></span></p>' +
-          '<div class="aim-mini-grid">' +
-            '<div class="mini-stat-item">NAcc onset<span class="mini-stat-val" id="aim-mini-nacc' + suffix + '">—</span></div>' +
-            '<div class="mini-stat-item">AIns aversion<span class="mini-stat-val" id="aim-mini-ains' + suffix + '">—</span></div>' +
-            '<div class="mini-stat-item">DMN self-ref<span class="mini-stat-val" id="aim-mini-mpfc' + suffix + '">—</span></div>' +
-            '<div class="mini-stat-item">Language<span class="mini-stat-val" id="aim-mini-pcc' + suffix + '">—</span></div>' +
-          '</div>' +
-          '<div style="margin-top:1rem;padding-top:0.75rem;border-top:1px dashed rgba(0,0,0,0.06)">' +
-            '<div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;color:var(--clr-violet);margin-bottom:0.25rem">Biggest lever</div>' +
-            '<div style="font-size:0.88rem;font-weight:700" id="lever-title' + suffix + '"></div>' +
-            '<div style="font-size:0.78rem;color:var(--text-secondary);line-height:1.45" id="lever-body' + suffix + '"></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="gauge-visual-card">' +
-          '<div class="gauge-svg-container" style="position:relative">' +
-            '<svg viewBox="0 0 120 70" width="140" height="90"><path d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="rgba(0,0,0,0.06)" stroke-width="8" stroke-linecap="round"/><path id="gauge-foreground' + suffix + '" d="M10,60 A50,50 0 0,1 110,60" fill="none" stroke="url(#gaugeGrad' + suffix + ')" stroke-width="8" stroke-linecap="round" stroke-dasharray="345.5" stroke-dashoffset="345.5"/><defs><linearGradient id="gaugeGrad' + suffix + '"><stop offset="0%" stop-color="#1a73e8"/><stop offset="100%" stop-color="#7c4dff"/></linearGradient></defs></svg>' +
-            '<div class="gauge-pct-center"><span id="virality-score-value' + suffix + '">0</span></div>' +
-          '</div>' +
-          '<div class="gauge-label">Grade <span id="virality-grade' + suffix + '">—</span></div>' +
-          '<p style="font-size:0.72rem;color:var(--text-muted);text-align:center;margin-top:0.35rem" id="virality-label' + suffix + '"></p>' +
-        '</div>' +
-      '</div>' +
-      '<div class="brain-visualizer-block">' +
-        '<div class="brain-map-wrapper" id="brain-map-container' + suffix + '"></div>' +
-        '<div class="brain-info-panel">' +
-          '<div class="active-roi-card"><div class="active-roi-header"><span class="active-roi-name" id="roi-active-name' + suffix + '">Select a network</span><span class="active-roi-val" id="roi-active-value' + suffix + '">—</span></div><p class="active-roi-desc" id="roi-active-desc' + suffix + '">Click a parcellation node to inspect activation.</p></div>' +
-          '<div id="region-list' + suffix + '"></div>' +
-          '<div id="network-legend' + suffix + '" style="margin-top:0.5rem"></div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="raw-bars-container" id="network-bars' + suffix + '"></div>' +
-      '<div style="background:#f8fafc;border-radius:12px;padding:1rem">' +
-        '<div class="report-section-title">AIM Breakdown</div>' +
-        '<div style="display:flex;flex-direction:column;gap:0.5rem;font-size:0.78rem">' +
-          '<div>NAcc reward <span id="aim-nacc-value' + suffix + '">—</span><div style="height:6px;background:rgba(0,0,0,0.04);border-radius:99px;margin-top:4px"><div id="aim-nacc-bar' + suffix + '" style="height:100%;width:0;background:#ec4899;border-radius:99px;transition:width 0.8s"></div></div></div>' +
-          '<div>AIns aversion <span id="aim-ains-value' + suffix + '">—</span><div style="height:6px;background:rgba(0,0,0,0.04);border-radius:99px;margin-top:4px"><div id="aim-ains-bar' + suffix + '" style="height:100%;width:0;background:#ef4444;border-radius:99px;transition:width 0.8s"></div></div></div>' +
-          '<div>Sustained engagement <span id="aim-engagement-value' + suffix + '">—</span><div style="height:6px;background:rgba(0,0,0,0.04);border-radius:99px;margin-top:4px"><div id="aim-engagement-bar' + suffix + '" style="height:100%;width:0;background:#22c55e;border-radius:99px;transition:width 0.8s"></div></div></div>' +
-        '</div>' +
-      '</div>' +
-      '<div class="timeline-block hidden" id="timeline-section' + suffix + '"><div class="report-section-title">Temporal dynamics</div><div class="timeline-canvas-container" id="timeline-canvas-wrapper' + suffix + '"><canvas class="timeline-canvas" id="timeline-canvas' + suffix + '"></canvas><div class="hidden" id="timeline-tooltip' + suffix + '" style="position:absolute;background:rgba(0,0,0,0.85);color:#fff;padding:6px 10px;border-radius:6px;font-size:11px;pointer-events:none"></div></div><div id="timeline-legend' + suffix + '"></div><div class="timeline-annotations" id="timeline-annotations' + suffix + '"></div></div>' +
-      '<div class="hidden" id="evidence-section' + suffix + '"><div class="report-section-title">Neural evidence</div><div id="evidence-grid' + suffix + '" style="display:grid;gap:0.75rem"></div></div>' +
-      '<div class="hidden" id="archetype-section' + suffix + '"><div class="report-section-title">Archetype benchmark</div><div id="archetype-table' + suffix + '" style="display:flex;flex-direction:column;gap:0.4rem"></div></div>' +
-      '<div class="hidden" id="tips-section' + suffix + '"><div class="report-section-title">Optimization tips · <span id="headroom-value' + suffix + '">+0pts</span> headroom</div><div id="tips-grid' + suffix + '" style="display:flex;flex-direction:column;gap:0.6rem"></div></div>' +
-      '<div class="insights-block hidden" id="insights-section' + suffix + '"><div class="report-section-title">Creator insights</div><div class="insights-list" id="insights-grid' + suffix + '"></div></div>' +
-      '<div class="hidden" id="methodology-section' + suffix + '" style="font-size:0.72rem;color:var(--text-muted);line-height:1.5;padding:0.5rem 0">Activations mapped via HCP MMP 1.0 parcellation on fsaverage5. Virality scored with Knutson AIM: weighted NAcc onset (1.6×), minus AIns aversion, plus sustained LANG/STS/FFA engagement.</div>' +
-    '</div>';
-  }
-
-  function buildAIMessageHTML(suffix) {
-    return '<div class="message-content">' + buildThinkingHTML(suffix) + buildReportHTML(suffix) + '</div>';
-  }
-
-  async function submitQuery() {
     var textarea = $('chat-textarea');
-    var text = textarea ? textarea.value.trim() : '';
-    var hasFile = stagedFiles.length > 0;
-    if (!text && !hasFile) return;
+    var textPrompt = textarea ? textarea.value.trim() : '';
+    var hasFiles = stagedFiles.length > 0;
 
-    var mediaType = hasFile ? stagedFiles[0].type : 'text';
-    var input = hasFile ? stagedFiles[0].file : text;
-    var textPrompt = text;
+    if (!textPrompt && !hasFiles) return;
 
-    var app = $('app-container');
-    if (app) app.classList.remove('state-landing');
-    if (app) app.classList.add('state-chat');
-
+    isAnalyzing = true;
+    toggleSendButton();
     messageCounter += 1;
-    var suffix = '-msg' + messageCounter;
+    var suffix = '_msg_' + Date.now();
+
+    var appContainer = $('app-container');
+    if (appContainer && appContainer.classList.contains('state-landing')) {
+      appContainer.classList.remove('state-landing');
+      appContainer.classList.add('state-chat');
+    }
+
     var thread = $('chat-messages');
-    if (!thread) return;
+    if (!thread) {
+      isAnalyzing = false;
+      toggleSendButton();
+      return;
+    }
 
     var userMsg = document.createElement('div');
     userMsg.className = 'chat-message user';
-    var userHtml = '<div class="message-content">';
-    if (hasFile) {
-      var icon = stagedFiles[0].type === 'video' ? '🎬' : (stagedFiles[0].type === 'image' ? '🖼️' : '🎵');
-      userHtml += '<div class="message-file-badge"><span>' + icon + '</span> ' + escapeHtml(stagedFiles[0].file.name) + '</div>';
+
+    var userContent = document.createElement('div');
+    userContent.className = 'message-content';
+
+    if (hasFiles) {
+      var sf = stagedFiles[0];
+      var icon = sf.type === 'video' ? '🎬' : (sf.type === 'image' ? '🖼️' : '🎵');
+      var badge = document.createElement('div');
+      badge.className = 'message-file-badge';
+      badge.innerHTML = '<span>' + icon + '</span><span>' + escapeHtml(sf.file.name) + '</span>';
+      userContent.appendChild(badge);
     }
-    if (text) userHtml += '<div class="message-text">' + escapeHtml(text) + '</div>';
-    userHtml += '</div>';
-    userMsg.innerHTML = userHtml;
+
+    if (textPrompt) {
+      var textEl = document.createElement('div');
+      textEl.className = 'message-text';
+      textEl.textContent = textPrompt;
+      userContent.appendChild(textEl);
+    }
+
+    userMsg.appendChild(userContent);
     thread.appendChild(userMsg);
 
     var aiMsg = document.createElement('div');
     aiMsg.className = 'chat-message ai';
-    aiMsg.innerHTML = '<div class="ai-avatar">✦</div>' + buildAIMessageHTML(suffix);
+
+    var avatar = document.createElement('div');
+    avatar.className = 'ai-avatar';
+    avatar.textContent = '✦';
+    aiMsg.appendChild(avatar);
+
+    var aiContent = document.createElement('div');
+    aiContent.className = 'message-content';
+
+    aiContent.innerHTML = '<div class="thinking-tracker" id="thinking-tracker' + suffix + '">' +
+      '<div class="thinking-header"><span class="thinking-icon">🧠</span> Analyzing neural response…</div>' +
+      '<div class="thinking-stepper">' +
+        '<div class="think-step" id="step-ingest' + suffix + '">Ingesting Media</div>' +
+        '<div class="think-step" id="step-visual' + suffix + '">Visual Features</div>' +
+        '<div class="think-step" id="step-audio' + suffix + '">Audio Spectrum</div>' +
+        '<div class="think-step" id="step-text' + suffix + '">Text Analysis</div>' +
+        '<div class="think-step" id="step-mapping' + suffix + '">Neural Mapping</div>' +
+        '<div class="think-step" id="step-scoring' + suffix + '">Virality Score</div>' +
+      '</div>' +
+      '<div class="thinking-progress"><div class="thinking-progress-bar" id="progress-bar-fill' + suffix + '"></div></div>' +
+      '<div class="thinking-pct" id="progress-pct' + suffix + '">0%</div>' +
+    '</div>' +
+    '<div class="report-root hidden" id="report-container' + suffix + '">' +
+      '<div class="tldr-banner">' +
+        '<div class="tldr-header"><span>TL;DR · Plain-English readout</span> <span id="tldr-tag' + suffix + '">—</span></div>' +
+        '<p class="tldr-body" id="tldr-body' + suffix + '"></p>' +
+      '</div>' +
+      '<div class="score-overview-block">' +
+        '<div class="score-hero-card">' +
+          '<div class="report-section-title">⚡ Virality Forecast</div>' +
+          '<div class="score-num-display">' +
+            '<span class="score-big-val" id="score-hero-value' + suffix + '">—</span>' +
+            '<span class="score-total-val">/ 100</span>' +
+          '</div>' +
+          '<div class="score-badge" id="percentile-value' + suffix + '">—</div>' +
+          '<div class="score-tagline" id="score-tag-line' + suffix + '"></div>' +
+          '<div class="aim-mini-grid">' +
+            '<div class="mini-stat-item"><span>Reward (NAcc)</span><span class="mini-stat-val" id="aim-mini-nacc' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item"><span>Aversion (AIns)</span><span class="mini-stat-val" id="aim-mini-ains' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item"><span>Value (MPFC)</span><span class="mini-stat-val" id="aim-mini-mpfc' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item"><span>Attention (PCC)</span><span class="mini-stat-val" id="aim-mini-pcc' + suffix + '">—</span></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gauge-visual-card">' +
+          '<div class="gauge-svg-container">' +
+            '<svg viewBox="0 0 120 120" width="140" height="140">' +
+              '<circle cx="60" cy="60" r="55" fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="8" transform="rotate(-90 60 60)"/>' +
+              '<circle id="gauge-foreground' + suffix + '" cx="60" cy="60" r="55" fill="none" stroke="url(#gauge-grad' + suffix + ')" stroke-width="8" stroke-dasharray="345.5" stroke-dashoffset="345.5" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition: stroke-dashoffset 1.2s ease;"/>' +
+            '</svg>' +
+            '<svg style="position:absolute;width:0;height:0;"><defs><linearGradient id="gauge-grad' + suffix + '" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#7c4dff"/><stop offset="100%" stop-color="#1a73e8"/></linearGradient></defs></svg>' +
+          '</div>' +
+          '<div class="gauge-pct-center" id="virality-score-value' + suffix + '">—</div>' +
+          '<div class="gauge-label" id="virality-grade' + suffix + '"></div>' +
+          '<div class="gauge-label" id="virality-label' + suffix + '" style="font-size:0.7rem; text-transform:none; letter-spacing:0;"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="score-overview-block">' +
+        '<div class="score-hero-card" style="padding:1rem;">' +
+          '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:700; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:0.3rem;">Closest archetype</div>' +
+          '<div style="font-size:1rem; font-weight:700; color:var(--text-primary);" id="archetype-match-name' + suffix + '">—</div>' +
+          '<div style="font-size:0.78rem; color:var(--text-muted);" id="archetype-match-ref' + suffix + '">reference score — / 100</div>' +
+        '</div>' +
+        '<div class="score-hero-card" style="padding:1rem; border-left:3px solid var(--clr-violet);">' +
+          '<div style="font-size:0.72rem; text-transform:uppercase; font-weight:700; color:var(--clr-violet); letter-spacing:0.05em; margin-bottom:0.3rem;">BIGGEST LEVER</div>' +
+          '<div style="font-size:0.95rem; font-weight:700; color:var(--text-primary);" id="lever-title' + suffix + '">—</div>' +
+          '<p style="font-size:0.82rem; color:var(--text-secondary); line-height:1.45;" id="lever-body' + suffix + '"></p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="brain-visualizer-block">' +
+        '<div class="brain-map-wrapper">' +
+          '<div id="brain-map-container' + suffix + '" style="width:100%;height:100%;"></div>' +
+        '</div>' +
+        '<div class="brain-info-panel">' +
+          '<div class="active-roi-card">' +
+            '<div class="report-section-title" style="font-size:0.85rem;">🧬 Click a region</div>' +
+            '<div class="active-roi-header">' +
+              '<span class="active-roi-name" id="roi-active-name' + suffix + '">Select a network</span>' +
+              '<span class="active-roi-val" id="roi-active-value' + suffix + '">—</span>' +
+            '</div>' +
+            '<div class="active-roi-desc" id="roi-active-desc' + suffix + '">Tap any glowing node on the brain map to inspect its activation level.</div>' +
+          '</div>' +
+          '<div id="network-legend' + suffix + '" style="display:flex; flex-wrap:wrap; gap:4px;"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="raw-bars-container">' +
+        '<div class="report-section-title">📊 Network Activation Bars</div>' +
+        '<div id="network-bars' + suffix + '"></div>' +
+      '</div>' +
+      '<div class="raw-bars-container">' +
+        '<div class="report-section-title">🗂️ Region Activation Scores</div>' +
+        '<div id="region-list' + suffix + '"></div>' +
+      '</div>' +
+      '<div class="raw-bars-container">' +
+        '<div class="report-section-title">🎯 AIM Decomposition</div>' +
+        '<div style="display:flex; flex-direction:column; gap:0.65rem;">' +
+          '<div class="raw-bar-row">' +
+            '<div class="raw-bar-meta"><span class="raw-bar-label">NAcc ↑ Positive Arousal</span><span id="aim-nacc-value' + suffix + '">—</span></div>' +
+            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-nacc-bar' + suffix + '" style="background:linear-gradient(90deg,#ec4899,#f59e0b);"></div></div>' +
+          '</div>' +
+          '<div class="raw-bar-row">' +
+            '<div class="raw-bar-meta"><span class="raw-bar-label">AIns ↓ Negative Affect</span><span id="aim-ains-value' + suffix + '">—</span></div>' +
+            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-ains-bar' + suffix + '" style="background:linear-gradient(90deg,#ef4444,#f59e0b);"></div></div>' +
+          '</div>' +
+          '<div class="raw-bar-row">' +
+            '<div class="raw-bar-meta"><span class="raw-bar-label">Sustained Engagement</span><span id="aim-engagement-value' + suffix + '">—</span></div>' +
+            '<div class="raw-bar-fill-track"><div class="raw-bar-fill" id="aim-engagement-bar' + suffix + '" style="background:linear-gradient(90deg,#22c55e,#14b8a6);"></div></div>' +
+          '</div>' +
+        '</div>' +
+        '<p style="font-size:0.75rem; color:var(--text-muted); margin-top:0.5rem;">Onset weighting: 1.6× for first 4 seconds per Knutson et al. (2020)</p>' +
+      '</div>' +
+      '<div class="timeline-block hidden" id="timeline-section' + suffix + '">' +
+        '<div class="report-section-title">📈 Engagement Timeline</div>' +
+        '<div class="timeline-canvas-container" id="timeline-canvas-wrapper' + suffix + '">' +
+          '<canvas id="timeline-canvas' + suffix + '" class="timeline-canvas"></canvas>' +
+          '<div class="hidden" id="timeline-tooltip' + suffix + '" style="position:absolute;pointer-events:none;background:rgba(0,0,0,0.85);color:#fff;padding:6px 10px;border-radius:6px;font-size:12px;white-space:nowrap;z-index:10;"></div>' +
+        '</div>' +
+        '<div id="timeline-legend' + suffix + '" style="display:flex;flex-wrap:wrap;gap:4px;margin-top:0.5rem;"></div>' +
+        '<div class="timeline-annotations" id="timeline-annotations' + suffix + '"></div>' +
+      '</div>' +
+      '<div class="hidden" id="evidence-section' + suffix + '">' +
+        '<div class="report-section-title">🔬 What the Brain Is Telling Us</div>' +
+        '<div id="evidence-grid' + suffix + '" style="display:flex; flex-direction:column; gap:0.65rem;"></div>' +
+      '</div>' +
+      '<div class="hidden" id="archetype-section' + suffix + '">' +
+        '<div class="report-section-title">🏆 Benchmark vs. Viral Archetypes</div>' +
+        '<div id="archetype-table' + suffix + '" style="display:flex; flex-direction:column; gap:0.45rem;"></div>' +
+      '</div>' +
+      '<div class="hidden" id="tips-section' + suffix + '">' +
+        '<div class="report-section-title">💡 Tips &amp; Recommendations</div>' +
+        '<div style="display:inline-flex; align-items:center; gap:0.5rem; background:rgba(124,77,255,0.06); border-radius:var(--radius-pill); padding:0.3rem 0.8rem; font-size:0.8rem; font-weight:600; color:var(--clr-violet); margin-bottom:0.75rem;"><span>Headroom</span><span id="headroom-value' + suffix + '">—</span></div>' +
+        '<div id="tips-grid' + suffix + '" style="display:flex; flex-direction:column; gap:0.65rem;"></div>' +
+      '</div>' +
+      '<div class="hidden" id="insights-section' + suffix + '">' +
+        '<div class="report-section-title">🧭 Creator Insights</div>' +
+        '<div id="insights-grid' + suffix + '" style="display:grid; grid-template-columns:1fr; gap:0.85rem;"></div>' +
+      '</div>' +
+      '<div class="hidden" id="methodology-section' + suffix + '">' +
+        '<div class="report-section-title" style="margin-bottom:0.35rem;">📜 How the Score Is Built</div>' +
+        '<p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.55; margin-bottom:0.5rem;">We extract trimodal features from your content — visual frames at 1 Hz, audio energy via Web Audio, and caption text — then map them to nine canonical brain networks defined by Meta\'s TRIBE v2 atlas.</p>' +
+        '<p style="font-size:0.85rem; color:var(--text-secondary); line-height:1.55; margin-bottom:0.5rem;">The virality score follows the Knutson lab AIM framework: positive arousal at video onset (NAcc↑) and low negative-affect signal (AIns↓) are the only neural measures that scaled out-of-sample to YouTube view counts.</p>' +
+        '<div style="background:rgba(219,68,55,0.04); border:1px solid rgba(219,68,55,0.1); border-radius:var(--radius-md); padding:0.85rem; font-size:0.78rem; color:var(--text-secondary); line-height:1.45;"><strong>Disclaimer.</strong> This is an in-silico simulation, not a clinical fMRI scan. For research and creative directional use only.</div>' +
+      '</div>' +
+    '</div>';
+
+    aiMsg.appendChild(aiContent);
     thread.appendChild(aiMsg);
+    scrollToBottom();
+
+    var input, mediaType;
+    if (hasFiles) {
+      var staged = stagedFiles[0];
+      input = staged.file;
+      mediaType = staged.type;
+    } else {
+      input = textPrompt;
+      mediaType = 'text';
+    }
 
     if (textarea) {
       textarea.value = '';
@@ -645,9 +752,11 @@
     stagedFiles = [];
     renderStagedFiles();
     toggleSendButton();
-    scrollToBottom();
 
-    await analyzeContent(input, mediaType, suffix, textPrompt);
+    analyzeContent(input, mediaType, suffix, textPrompt).finally(function () {
+      isAnalyzing = false;
+      toggleSendButton();
+    });
   }
 
   // ═══════════════════════════════════════════════════════════════

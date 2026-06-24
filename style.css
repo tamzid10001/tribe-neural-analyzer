@@ -655,6 +655,7 @@ textarea {
 .gauge-svg-container {
   width: 140px;
   height: 140px;
+  position: relative;
 }
 
 .gauge-pct-center {
@@ -1124,6 +1125,7 @@ textarea {
   animation: chat-fade-in 0.2s var(--ease-out);
 }
 
+.file-pill,
 .attachment-preview-pill {
   display: inline-flex;
   align-items: center;
@@ -1137,6 +1139,7 @@ textarea {
   color: var(--clr-violet);
 }
 
+.btn-pill-remove,
 .btn-attachment-remove {
   width: 18px;
   height: 18px;
@@ -1149,9 +1152,21 @@ textarea {
   transition: background var(--transition-base), color var(--transition-base);
 }
 
+.btn-pill-remove:hover,
 .btn-attachment-remove:hover {
   background: rgba(0, 0, 0, 0.06);
   color: var(--clr-danger);
+}
+
+.attachment-icon {
+  line-height: 1;
+}
+
+.attachment-name {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .scan-action-bar {
