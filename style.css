@@ -946,15 +946,6 @@ textarea {
 .stimulus-script-row {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-}
-
-.stimulus-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
 }
 
 #chat-textarea {

@@ -148,32 +148,24 @@
       title: 'Drop video stimulus here',
       hint: 'MP4, MOV, WebM · maps V1, FFA, EBA, STS, NAcc onset',
       accept: 'video/*',
-      label: 'Hook, script, or caption',
-      placeholder: 'Optional: paste voiceover, on-screen text, or describe the hook…',
     },
     audio: {
       icon: '🎵',
       title: 'Drop audio stimulus here',
       hint: 'MP3, WAV, FLAC · maps STS prosody, NAcc reward bursts, AIns aversion',
       accept: 'audio/*',
-      label: 'Transcript or show notes',
-      placeholder: 'Optional: paste podcast transcript or narration script…',
     },
     image: {
       icon: '🖼️',
       title: 'Drop thumbnail or frame here',
       hint: 'JPG, PNG, WebP · maps V1 contrast, FFA faces, PPA scene composition',
       accept: 'image/*',
-      label: 'Caption or context',
-      placeholder: 'Describe what viewers see — hook text, title overlay, etc.',
     },
     text: {
       icon: '📝',
       title: '',
       hint: '',
       accept: '',
-      label: 'Script or hook text',
-      placeholder: 'Paste your opening hook, ad copy, or narration — TRIBE maps LANG, DMN, NAcc from syntax…',
     },
   };
 
@@ -277,8 +269,6 @@
     var dropIcon = $('dropzone-icon');
     var dropTitle = $('dropzone-title');
     var dropHint = $('dropzone-hint');
-    var stimLabel = $('stimulus-label');
-    var textarea = $('chat-textarea');
 
     document.querySelectorAll('.modality-tab').forEach(function (tab) {
       var isActive = tab.getAttribute('data-mode') === mode;
@@ -296,8 +286,6 @@
       if (fileUploader) fileUploader.accept = cfg.accept;
     }
 
-    if (stimLabel) stimLabel.textContent = cfg.label;
-    if (textarea) textarea.placeholder = cfg.placeholder;
     toggleSendButton();
   }
 
