@@ -6,21 +6,26 @@ import logging
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import torch
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-# Ensure caching directories are aligned with container environment
-os.environ["HF_HOME"] = "/app/cache"
-os.environ["MNE_DATA"] = "/app/mne_data"
-os.environ["NILEARN_DATA"] = "/app/nilearn_data"
-os.environ["SUBJECTS_DIR"] = "/app/mne_data"
+BASE_DIR = Path(__file__).resolve().parent
+IS_CONTAINER = BASE_DIR == Path("/app")
 
-# Create directories explicitly to avoid directory-not-found errors at runtime
-os.makedirs("/app/cache", exist_ok=True)
-os.makedirs("/app/mne_data", exist_ok=True)
-os.makedirs("/app/nilearn_data", exist_ok=True)
+# Use /app paths in Docker; workspace-relative paths for local development
+CACHE_ROOT = Path(os.environ.get("HF_HOME", "/app/cache" if IS_CONTAINER else BASE_DIR / "cache"))
+MNE_ROOT = Path(os.environ.get("MNE_DATA", "/app/mne_data" if IS_CONTAINER else BASE_DIR / "mne_data"))
+NILEARN_ROOT = Path(os.environ.get("NILEARN_DATA", "/app/nilearn_data" if IS_CONTAINER else BASE_DIR / "nilearn_data"))
+
+os.environ["HF_HOME"] = str(CACHE_ROOT)
+os.environ["MNE_DATA"] = str(MNE_ROOT)
+os.environ["NILEARN_DATA"] = str(NILEARN_ROOT)
+os.environ["SUBJECTS_DIR"] = str(MNE_ROOT)
+
+for cache_dir in (CACHE_ROOT, MNE_ROOT, NILEARN_ROOT):
+    cache_dir.mkdir(parents=True, exist_ok=True)
 
 
 # Setup logging
@@ -77,10 +82,11 @@ def startup_event():
     
     # 1. Load the model
     try:
+        import torch
         from tribev2 import TribeModel
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Loading TribeModel on device: {device}...")
-        model = TribeModel.from_pretrained("facebook/tribev2", cache_folder="/app/cache", device=device)
+        model = TribeModel.from_pretrained("facebook/tribev2", cache_folder=str(CACHE_ROOT), device=device)
         logger.info("TribeModel loaded successfully.")
     except Exception as e:
         logger.error(f"Critical error loading TribeModel: {e}")
@@ -128,7 +134,12 @@ def get_status():
             networks_mapped=[]
         )
     
-    device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    device_str = "unknown"
+    try:
+        import torch
+        device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        pass
     return StatusResponse(
         status="ready",
         model="facebook/tribev2",
@@ -278,3 +289,21 @@ async def analyze_content(
             logger.info("Temporary processing directory cleaned up.")
         except Exception as cleanup_err:
             logger.warning(f"Error cleaning up temporary files: {cleanup_err}")
+
+
+STATIC_FILES = {
+    "app.js": "application/javascript",
+    "style.css": "text/css",
+}
+
+
+@app.get("/")
+def serve_index():
+    return FileResponse(BASE_DIR / "index.html", media_type="text/html")
+
+
+@app.get("/{static_name}")
+def serve_static(static_name: str):
+    if static_name not in STATIC_FILES:
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(BASE_DIR / static_name, media_type=STATIC_FILES[static_name])
