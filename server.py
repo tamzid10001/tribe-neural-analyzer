@@ -28,6 +28,15 @@ os.environ["SUBJECTS_DIR"] = str(MNE_ROOT)
 for cache_dir in (CACHE_ROOT, MNE_ROOT, NILEARN_ROOT):
     cache_dir.mkdir(parents=True, exist_ok=True)
 
+# Import torch on the main thread before worker threads start.
+try:
+    import torch
+except Exception as import_err:
+    torch = None
+    _IMPORT_ERROR = str(import_err)
+else:
+    _IMPORT_ERROR = None
+
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -108,8 +117,30 @@ def _image_to_video(image_path: Path, video_path: Path, duration: float = 3.0, f
     clip.close()
 
 
+def _refine_network_vectors():
+    """Optional ROI refinement — runs after the model is already marked ready."""
+    global NETWORK_VECTORS
+    try:
+        from tribev2.utils import get_hcp_roi_indices
+        logger.info("Refining HCP MMP 1.0 cortical ROI mappings...")
+        refined_vectors = {}
+        for net_id, rois in NETWORK_ROIS.items():
+            try:
+                indices = get_hcp_roi_indices(rois, hemi="both", mesh="fsaverage5")
+                refined_vectors[net_id] = indices
+                logger.info(f"Mapped {net_id} -> {len(indices)} vertices on fsaverage5.")
+            except Exception as ex:
+                logger.warning(f"Could not map ROIs {rois} for network {net_id}: {ex}")
+                refined_vectors[net_id] = _fallback_network_vectors()[net_id]
+        with _model_lock:
+            NETWORK_VECTORS = refined_vectors
+        logger.info("ROI mapping refinement complete.")
+    except Exception as e:
+        logger.warning(f"ROI mapping refinement skipped: {e}")
+
+
 def _load_model_and_networks():
-    """Load TRIBE v2 and ROI mappings in a background thread so /status responds immediately."""
+    """Load TRIBE v2 on the main thread, then mark the service ready."""
     global model, NETWORK_VECTORS, model_load_state, model_load_error
 
     with _model_lock:
@@ -118,10 +149,15 @@ def _load_model_and_networks():
 
     logger.info("Initializing TRIBE v2 Backend Server...")
 
-    loaded_model = None
+    if torch is None:
+        logger.error(f"Critical import error: {_IMPORT_ERROR}")
+        with _model_lock:
+            model = None
+            model_load_state = "loading_error"
+            model_load_error = _IMPORT_ERROR or "Failed to import torch"
+        return
 
     try:
-        import torch
         from tribev2 import TribeModel
         device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"Loading TribeModel on device: {device}...")
@@ -142,24 +178,6 @@ def _load_model_and_networks():
         model_load_error = None
     logger.info("TRIBE v2 backend is ready.")
 
-    try:
-        from tribev2.utils import get_hcp_roi_indices
-        logger.info("Refining HCP MMP 1.0 cortical ROI mappings...")
-        refined_vectors = {}
-        for net_id, rois in NETWORK_ROIS.items():
-            try:
-                indices = get_hcp_roi_indices(rois, hemi="both", mesh="fsaverage5")
-                refined_vectors[net_id] = indices
-                logger.info(f"Mapped {net_id} -> {len(indices)} vertices on fsaverage5.")
-            except Exception as ex:
-                logger.warning(f"Could not map ROIs {rois} for network {net_id}: {ex}")
-                refined_vectors[net_id] = _fallback_network_vectors()[net_id]
-        with _model_lock:
-            NETWORK_VECTORS = refined_vectors
-        logger.info("ROI mapping refinement complete.")
-    except Exception as e:
-        logger.warning(f"ROI mapping refinement skipped: {e}")
-
 
 @app.on_event("startup")
 def startup_event():
@@ -168,7 +186,9 @@ def startup_event():
         if _load_started:
             return
         _load_started = True
-    threading.Thread(target=_load_model_and_networks, daemon=True).start()
+    _load_model_and_networks()
+    if model_load_state == "ready":
+        threading.Thread(target=_refine_network_vectors, daemon=True).start()
 
 
 class StatusResponse(BaseModel):
