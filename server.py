@@ -75,6 +75,30 @@ def sigmoid_normalize(z_scores, k=1.0, center=0.0):
     """
     return 1.0 / (1.0 + np.exp(-k * (z_scores - center)))
 
+
+def _write_text_file(path: Path, content: str) -> None:
+    """Write text and flush to disk before tribev2 reads the path."""
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(content)
+        handle.flush()
+        os.fsync(handle.fileno())
+
+
+def _image_to_video(image_path: Path, video_path: Path, duration: float = 3.0, fps: int = 10) -> None:
+    """Convert a still image into a short MP4 for TRIBE v2 video pipeline."""
+    from moviepy import ImageClip
+
+    clip = ImageClip(str(image_path), duration=duration)
+    clip.write_videofile(
+        str(video_path),
+        codec="libx264",
+        audio=False,
+        fps=fps,
+        logger=None,
+    )
+    clip.close()
+
+
 def _load_model_and_networks():
     """Load TRIBE v2 and ROI mappings in a background thread so /status responds immediately."""
     global model, NETWORK_VECTORS, model_load_state, model_load_error
@@ -224,7 +248,7 @@ async def analyze_content(
             if ext in [".mp4", ".avi", ".mkv", ".mov", ".webm"]:
                 media_type = "video"
                 try:
-                    from moviepy.editor import VideoFileClip
+                    from moviepy import VideoFileClip
                     clip = VideoFileClip(str(temp_file_path))
                     duration = clip.duration
                     clip.close()
@@ -240,6 +264,16 @@ async def analyze_content(
                 except Exception as ex:
                     logger.warning(f"Could not parse audio duration with soundfile: {ex}. Defaulting to 10s.")
                     duration = 10.0
+            elif ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
+                media_type = "video"
+                video_path = temp_dir / "input.mp4"
+                try:
+                    _image_to_video(temp_file_path, video_path)
+                    temp_file_path = video_path
+                    duration = 3.0
+                except Exception as ex:
+                    logger.error(f"Failed to convert image to video: {ex}")
+                    raise HTTPException(status_code=500, detail=f"Failed to process image: {str(ex)}")
             elif ext == ".txt":
                 media_type = "text"
                 temp_file_path = temp_file_path # treated as text path
@@ -249,8 +283,7 @@ async def analyze_content(
             # Handle direct text payload
             media_type = "text"
             temp_file_path = temp_dir / "input.txt"
-            with open(temp_file_path, "w", encoding="utf-8") as f:
-                f.write(text)
+            _write_text_file(temp_file_path, text)
             duration = max(1.0, len(text.split()) * 0.4) # rough estimate of speech reading rate
 
         logger.info(f"Processing {media_type} stimuli with estimated duration of {duration:.2f} seconds...")

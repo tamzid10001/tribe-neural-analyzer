@@ -10,19 +10,21 @@ ENV PYTHONUNBUFFERED=1 \
     MNE_DATA=/app/mne_data \
     NILEARN_DATA=/app/nilearn_data \
     SUBJECTS_DIR=/app/mne_data \
-    PORT=8080
+    PORT=8080 \
+    PATH="/root/.local/bin:${PATH}"
 
 
 # Install system dependencies required for scientific libraries and audio/video feature extraction
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
+    curl \
     build-essential \
     ffmpeg \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip
+# Upgrade pip and install uv (provides uvx for tribev2 whisperx transcription)
+RUN pip install --no-cache-dir --upgrade pip uv
 
 # Install server dependencies and essential scientific helpers
 RUN pip install --no-cache-dir \
@@ -33,8 +35,8 @@ RUN pip install --no-cache-dir \
     pydantic \
     jinja2
 
-# Copy the local tribev2 repository cloned in scratch/
-COPY scratch/tribev2_repo /app/tribev2_repo
+# Clone tribev2 from GitHub (required for TRIBE v2 inference pipeline)
+RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /app/tribev2_repo
 
 # Install tribev2 package in editable mode along with its plotting dependencies (nilearn, nibabel, etc.)
 RUN pip install -e "/app/tribev2_repo[plotting]"
