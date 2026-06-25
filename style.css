@@ -218,11 +218,19 @@ textarea {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
-  padding-bottom: 300px;
+  padding: 72px 24px 2rem;
 }
 
 #app-container.state-chat .composer-container {
-  padding-bottom: 16px;
+  position: relative;
+  bottom: auto;
+  left: auto;
+  flex-shrink: 0;
+  width: 100%;
+  z-index: 20;
+  background: var(--bg-deep);
+  border-top: 1px solid var(--border-light);
+  padding: 8px 20px calc(16px + env(safe-area-inset-bottom, 0px));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -363,20 +371,13 @@ textarea {
 }
 
 .ai-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 0;
-  border: 1px solid var(--border-light);
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  display: none;
 }
 
 .chat-message.ai .message-content {
   flex-grow: 1;
-  max-width: calc(100% - 44px);
+  max-width: 100%;
+  min-width: 0;
   color: var(--text-primary);
 }
 
@@ -478,6 +479,7 @@ textarea {
   flex-direction: column;
   gap: 1.75rem;
   width: 100%;
+  min-width: 0;
 }
 
 /* Report Section Headers */
