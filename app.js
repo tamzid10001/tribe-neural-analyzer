@@ -121,6 +121,19 @@
     return CLOUD_BACKEND_URL;
   }
 
+  function isLocalBackendUrl(url) {
+    if (!url) return false;
+    return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(String(url).replace(/\/$/, ''));
+  }
+
+  function normalizeBackendUrl(url) {
+    var trimmed = (url || '').trim().replace(/\/$/, '');
+    if (!trimmed || isLocalBackendUrl(trimmed)) {
+      return getDefaultBackendUrl();
+    }
+    return trimmed;
+  }
+
   // ─── STATE ─────────────────────────────────────────────────────
   var stagedFiles = [];
   var stimulusMode = 'video';
@@ -2535,7 +2548,8 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
     var btnSave = $('btn-save-backend-url');
     var drawer = $('settings-drawer');
 
-    var savedUrl = localStorage.getItem('tribe_backend_url') || getDefaultBackendUrl();
+    var savedUrl = normalizeBackendUrl(localStorage.getItem('tribe_backend_url') || getDefaultBackendUrl());
+    localStorage.setItem('tribe_backend_url', savedUrl);
     var savedToken = localStorage.getItem('tribe_backend_token') || '';
 
     backendUrl = savedUrl;
@@ -2550,7 +2564,7 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
         if (enteredUrl.endsWith('/')) {
           enteredUrl = enteredUrl.slice(0, -1);
         }
-        backendUrl = enteredUrl;
+        backendUrl = normalizeBackendUrl(enteredUrl);
         localStorage.setItem('tribe_backend_url', enteredUrl);
         urlInput.value = enteredUrl;
 
@@ -2591,7 +2605,7 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
 
     try {
       var controller = new AbortController();
-      var timeoutId = setTimeout(function () { controller.abort(); }, 5000);
+      var timeoutId = setTimeout(function () { controller.abort(); }, 25000);
 
       var headers = {};
       if (backendToken) {
@@ -2628,7 +2642,11 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
       }
     } catch (e) {
       statusDot.className = 'status-dot offline';
-      statusText.textContent = 'Cloud Offline';
+      if (e && e.name === 'AbortError') {
+        statusText.textContent = 'Cloud Timeout (cold start?)';
+      } else {
+        statusText.textContent = 'Cloud Offline';
+      }
     } finally {
       isCheckingStatus = false;
     }
