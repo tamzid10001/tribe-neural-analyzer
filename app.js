@@ -115,12 +115,10 @@
 
   function $(id, suffix) { return document.getElementById(id + (suffix || '')); }
 
+  var CLOUD_BACKEND_URL = 'https://tribe-backend-351432107547.us-central1.run.app';
+
   function getDefaultBackendUrl() {
-    var host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return window.location.origin;
-    }
-    return 'https://tribe-backend-351432107547.us-central1.run.app';
+    return CLOUD_BACKEND_URL;
   }
 
   // ─── STATE ─────────────────────────────────────────────────────
