@@ -25,7 +25,7 @@ os.environ["MNE_DATA"] = str(MNE_ROOT)
 os.environ["NILEARN_DATA"] = str(NILEARN_ROOT)
 os.environ["SUBJECTS_DIR"] = str(MNE_ROOT)
 
-for cache_dir in (CACHE_ROOT, MNE_ROOT, NILEARN_ROOT):
+for cache_dir in (CACHE_ROOT, CACHE_ROOT / "hub", CACHE_ROOT / "whisper", MNE_ROOT, NILEARN_ROOT):
     cache_dir.mkdir(parents=True, exist_ok=True)
 
 
@@ -112,6 +112,38 @@ NETWORK_ROIS = {
 }
 
 
+def _whisperx_env() -> dict:
+    env = {k: v for k, v in os.environ.items() if k != "MPLBACKEND"}
+    env["HF_HOME"] = str(CACHE_ROOT)
+    env["HUGGINGFACE_HUB_CACHE"] = str(CACHE_ROOT / "hub")
+    env["TRANSFORMERS_CACHE"] = str(CACHE_ROOT / "hub")
+    env["WHISPER_CACHE"] = str(CACHE_ROOT / "whisper")
+    env["CUDA_VISIBLE_DEVICES"] = ""
+    return env
+
+
+def _resolve_whisperx_bin() -> str:
+    """Use pip-installed whisperx; never fall back to uvx ephemeral environments."""
+    candidates = [
+        os.environ.get("WHISPERX_BIN"),
+        "/usr/local/bin/whisperx",
+        shutil.which("whisperx"),
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        path = Path(candidate)
+        if not path.exists():
+            continue
+        resolved = str(path.resolve())
+        if "/.cache/uv/" in resolved or resolved.endswith("/uvx"):
+            continue
+        return resolved
+    raise RuntimeError(
+        "whisperx binary not found. Rebuild the Cloud Run image with pip-installed whisperx."
+    )
+
+
 def _patch_tribev2_whisperx_cpu():
     """Patch TRIBE's whisperx call for CPU (float32) and preinstalled whisperx."""
     import json
@@ -130,7 +162,8 @@ def _patch_tribev2_whisperx_cpu():
 
         with tempfile.TemporaryDirectory() as output_dir:
             logger.info("Running whisperx...")
-            whisper_bin = shutil.which("whisperx") or "whisperx"
+            whisper_bin = _resolve_whisperx_bin()
+            whisper_cache = str(CACHE_ROOT / "whisper")
             cmd = [
                 whisper_bin,
                 str(wav_filename),
@@ -143,16 +176,25 @@ def _patch_tribev2_whisperx_cpu():
                 "--compute_type",
                 compute_type,
                 "--batch_size",
-                "8",
+                "4",
+                "--vad_method",
+                "silero",
                 "--align_model",
                 "WAV2VEC2_ASR_LARGE_LV60K_960H" if language == "english" else "",
+                "--model_dir",
+                whisper_cache,
+                "--model_cache_only",
+                "True",
                 "--output_dir",
                 output_dir,
                 "--output_format",
                 "json",
             ]
             cmd = [c for c in cmd if c]
-            env = {k: v for k, v in os.environ.items() if k != "MPLBACKEND"}
+            env = _whisperx_env()
+            hf_token = os.environ.get("HF_TOKEN")
+            if hf_token:
+                cmd.extend(["--hf_token", hf_token])
             result = subprocess.run(cmd, capture_output=True, text=True, env=env)
             if result.returncode != 0:
                 raise RuntimeError(f"whisperx failed:\n{result.stderr}")

@@ -1,0 +1,14 @@
+steps:
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg
+      - HF_TOKEN=${_HF_TOKEN}
+      - -t
+      - ${_IMAGE}
+      - .
+images:
+  - ${_IMAGE}
+substitutions:
+  _HF_TOKEN: ""
+  _IMAGE: gcr.io/bornos-rag/tribe-backend

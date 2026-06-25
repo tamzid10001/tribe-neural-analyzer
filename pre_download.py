@@ -9,12 +9,18 @@ import sys
 
 # Ensure caching dirs are set to /app paths
 os.environ["HF_HOME"] = "/app/cache"
+os.environ["HUGGINGFACE_HUB_CACHE"] = "/app/cache/hub"
+os.environ["TRANSFORMERS_CACHE"] = "/app/cache/hub"
+os.environ["WHISPER_CACHE"] = "/app/cache/whisper"
 os.environ["MNE_DATA"] = "/app/mne_data"
 os.environ["NILEARN_DATA"] = "/app/nilearn_data"
 os.environ["SUBJECTS_DIR"] = "/app/mne_data"
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
 
 # Create directories explicitly to prevent MNE from throwing non-existent SUBJECTS_DIR errors
 os.makedirs("/app/cache", exist_ok=True)
+os.makedirs("/app/cache/hub", exist_ok=True)
+os.makedirs("/app/cache/whisper", exist_ok=True)
 os.makedirs("/app/mne_data", exist_ok=True)
 os.makedirs("/app/nilearn_data", exist_ok=True)
 
@@ -72,6 +78,65 @@ try:
     print("TRIBE v2 model and weights loaded & cached successfully.")
 except Exception as e:
     print(f"Error downloading TRIBE v2 weights/model: {e}", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    print("4. Pre-downloading WhisperX / faster-whisper models...")
+    from huggingface_hub import snapshot_download
+
+    hf_token = os.environ.get("HF_TOKEN") or None
+    whisper_cache = "/app/cache/whisper"
+    hub_cache = "/app/cache/hub"
+    for repo_id in (
+        "Systran/faster-whisper-large-v3",
+        "Systran/faster-whisper-large-v3-turbo",
+    ):
+        try:
+            snapshot_download(
+                repo_id=repo_id,
+                cache_dir=hub_cache,
+                token=hf_token,
+            )
+            print(f"Cached {repo_id}")
+        except Exception as repo_err:
+            print(f"Warning: could not cache {repo_id}: {repo_err}", file=sys.stderr)
+
+    import torchaudio
+    torchaudio.pipelines.WAV2VEC2_ASR_LARGE_LV60K_960H.get_model()
+    print("Cached wav2vec2 alignment model.")
+
+    import subprocess
+    import struct
+    import wave
+
+    silent_wav = "/tmp/whisper_warmup.wav"
+    with wave.open(silent_wav, "w") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(16000)
+        handle.writeframes(struct.pack("<h", 0) * 16000)
+
+    warmup_env = os.environ.copy()
+    warmup_cmd = [
+        "whisperx",
+        silent_wav,
+        "--model", "large-v3",
+        "--language", "en",
+        "--device", "cpu",
+        "--compute_type", "float32",
+        "--batch_size", "1",
+        "--vad_method", "silero",
+        "--align_model", "WAV2VEC2_ASR_LARGE_LV60K_960H",
+        "--model_dir", whisper_cache,
+        "--output_dir", "/tmp/whisper_warmup_out",
+        "--output_format", "json",
+    ]
+    if hf_token:
+        warmup_cmd.extend(["--hf_token", hf_token])
+    subprocess.run(warmup_cmd, check=True, env=warmup_env, capture_output=True, text=True)
+    print("WhisperX warmup completed.")
+except Exception as e:
+    print(f"Error pre-downloading WhisperX models: {e}", file=sys.stderr)
     sys.exit(1)
 
 print("=== Pre-download & Caching Stage Completed Successfully ===")
