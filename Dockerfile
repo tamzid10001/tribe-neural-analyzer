@@ -27,11 +27,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip and install CPU PyTorch + WhisperX (avoid uvx runtime bootstrap + CUDA wheels)
+# CPU PyTorch first — whisperx/tribev2 will try to replace it with CUDA wheels if unchecked.
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
-      torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir whisperx
+      torch torchvision torchaudio \
+      --index-url https://download.pytorch.org/whl/cpu
+
+# WhisperX runtime deps only (skip pyannote/CUDA torch pulled by full whisperx install).
+RUN pip install --no-cache-dir \
+    faster-whisper ctranslate2 nltk omegaconf pandas av onnxruntime \
+    huggingface-hub tqdm regex scipy && \
+    pip install --no-cache-dir whisperx --no-deps
 
 # Install server dependencies and essential scientific helpers
 RUN pip install --no-cache-dir \
@@ -47,6 +53,11 @@ RUN git clone --depth 1 https://github.com/facebookresearch/tribev2.git /app/tri
 
 # Install tribev2 package in editable mode along with its plotting dependencies (nilearn, nibabel, etc.)
 RUN pip install -e "/app/tribev2_repo[plotting]"
+
+# Force CPU torch after all pip installs (whisperx/tribev2 deps may swap in CUDA builds).
+RUN pip install --no-cache-dir --force-reinstall \
+    torch torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cpu
 
 # Copy pre-download caching script and application server code
 COPY pre_download.py /app/pre_download.py

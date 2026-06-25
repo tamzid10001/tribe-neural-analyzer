@@ -12,10 +12,15 @@ if ! command -v gcloud >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Building ${IMAGE} ..."
-if [[ -z "${HF_TOKEN:-}" ]]; then
-  echo "Tip: export HF_TOKEN=hf_... to avoid HuggingFace rate limits during build/runtime."
+if [[ -z "${HF_TOKEN:-}" || "${HF_TOKEN}" == "hf_your_token_here" ]]; then
+  echo "Error: You need a real HuggingFace token (not the placeholder)."
+  echo "  1. Create one at https://huggingface.co/settings/tokens"
+  echo "  2. export HF_TOKEN=hf_xxxxxxxxxxxxxxxx"
+  echo "  3. bash scripts/deploy-cloud-run.sh"
+  exit 1
 fi
+
+echo "Building ${IMAGE} ..."
 
 gcloud builds submit \
   --project "$PROJECT_ID" \

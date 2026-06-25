@@ -112,7 +112,7 @@ NETWORK_ROIS = {
 }
 
 
-SERVER_BUILD = "inprocess-whisper-v3"
+SERVER_BUILD = "inprocess-whisper-v4"
 
 
 def _configure_hf_auth() -> None:
