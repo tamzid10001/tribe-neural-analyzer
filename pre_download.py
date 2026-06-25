@@ -108,6 +108,7 @@ try:
     import subprocess
     import struct
     import wave
+    import whisperx
 
     silent_wav = "/tmp/whisper_warmup.wav"
     with wave.open(silent_wav, "w") as handle:
@@ -116,25 +117,19 @@ try:
         handle.setframerate(16000)
         handle.writeframes(struct.pack("<h", 0) * 16000)
 
-    warmup_env = os.environ.copy()
-    warmup_cmd = [
-        "whisperx",
-        silent_wav,
-        "--model", "large-v3",
-        "--language", "en",
-        "--device", "cpu",
-        "--compute_type", "float32",
-        "--batch_size", "1",
-        "--vad_method", "silero",
-        "--align_model", "WAV2VEC2_ASR_LARGE_LV60K_960H",
-        "--model_dir", whisper_cache,
-        "--output_dir", "/tmp/whisper_warmup_out",
-        "--output_format", "json",
-    ]
-    if hf_token:
-        warmup_cmd.extend(["--hf_token", hf_token])
-    subprocess.run(warmup_cmd, check=True, env=warmup_env, capture_output=True, text=True)
-    print("WhisperX warmup completed.")
+    hf_token = os.environ.get("HF_TOKEN") or None
+    model = whisperx.load_model(
+        "large-v3",
+        device="cpu",
+        compute_type="float32",
+        vad_method="silero",
+        download_root=whisper_cache,
+        local_files_only=False,
+        use_auth_token=hf_token,
+    )
+    audio = whisperx.load_audio(silent_wav)
+    model.transcribe(audio, batch_size=1, language="en")
+    print("WhisperX in-process warmup completed.")
 except Exception as e:
     print(f"Error pre-downloading WhisperX models: {e}", file=sys.stderr)
     sys.exit(1)

@@ -112,113 +112,104 @@ NETWORK_ROIS = {
 }
 
 
-def _whisperx_env() -> dict:
-    env = {k: v for k, v in os.environ.items() if k != "MPLBACKEND"}
-    env["HF_HOME"] = str(CACHE_ROOT)
-    env["HUGGINGFACE_HUB_CACHE"] = str(CACHE_ROOT / "hub")
-    env["TRANSFORMERS_CACHE"] = str(CACHE_ROOT / "hub")
-    env["WHISPER_CACHE"] = str(CACHE_ROOT / "whisper")
-    env["CUDA_VISIBLE_DEVICES"] = ""
-    return env
+SERVER_BUILD = "inprocess-whisper-v3"
 
 
-def _resolve_whisperx_bin() -> str:
-    """Use pip-installed whisperx; never fall back to uvx ephemeral environments."""
-    candidates = [
-        os.environ.get("WHISPERX_BIN"),
-        "/usr/local/bin/whisperx",
-        shutil.which("whisperx"),
-    ]
-    for candidate in candidates:
-        if not candidate:
-            continue
-        path = Path(candidate)
-        if not path.exists():
-            continue
-        resolved = str(path.resolve())
-        if "/.cache/uv/" in resolved or resolved.endswith("/uvx"):
-            continue
-        return resolved
-    raise RuntimeError(
-        "whisperx binary not found. Rebuild the Cloud Run image with pip-installed whisperx."
-    )
+def _configure_hf_auth() -> None:
+    token = os.environ.get("HF_TOKEN")
+    if token:
+        os.environ["HF_TOKEN"] = token
+        os.environ["HUGGING_FACE_HUB_TOKEN"] = token
+
+
+_whisper_state = {"model": None, "align_model": None, "align_metadata": None}
+_whisper_lock = threading.Lock()
+
+
+def _transcribe_audio_to_words(wav_filename, language: str) -> pd.DataFrame:
+    """Transcribe audio in-process. Never shells out to uvx/whisperx CLI."""
+    import whisperx
+
+    _configure_hf_auth()
+    language_codes = dict(english="en", french="fr", spanish="es", dutch="nl", chinese="zh")
+    if language not in language_codes:
+        raise ValueError(f"Language {language} not supported")
+
+    lang = language_codes[language]
+    device = _resolve_inference_device()
+    compute_type = "float32" if device == "cpu" else "float16"
+    whisper_cache = str(CACHE_ROOT / "whisper")
+    local_only = IS_CONTAINER
+    hf_token = os.environ.get("HF_TOKEN") or None
+
+    audio = whisperx.load_audio(str(wav_filename))
+    if audio.size == 0 or float(np.max(np.abs(audio))) < 1e-4:
+        logger.info("Skipping transcription for silent/empty audio.")
+        return pd.DataFrame(columns=["text", "start", "duration", "sequence_id", "sentence"])
+
+    with _whisper_lock:
+        if _whisper_state["model"] is None:
+            logger.info("Loading WhisperX model in-process on %s...", device)
+            _whisper_state["model"] = whisperx.load_model(
+                "large-v3",
+                device=device,
+                compute_type=compute_type,
+                vad_method="silero",
+                download_root=whisper_cache,
+                local_files_only=local_only,
+                use_auth_token=hf_token,
+            )
+        whisper_model = _whisper_state["model"]
+
+    result = whisper_model.transcribe(audio, batch_size=4, language=lang)
+    segments = result.get("segments") or []
+
+    if language == "english" and segments:
+        with _whisper_lock:
+            if _whisper_state["align_model"] is None:
+                logger.info("Loading WhisperX alignment model in-process...")
+                _whisper_state["align_model"], _whisper_state["align_metadata"] = whisperx.load_align_model(
+                    lang,
+                    device,
+                    model_name="WAV2VEC2_ASR_LARGE_LV60K_960H",
+                    model_dir=whisper_cache,
+                    model_cache_only=local_only,
+                )
+            align_model = _whisper_state["align_model"]
+            align_metadata = _whisper_state["align_metadata"]
+        aligned = whisperx.align(segments, align_model, align_metadata, audio, device)
+        segments = aligned.get("segments") or segments
+
+    words = []
+    for i, segment in enumerate(segments):
+        sentence = segment.get("text", "").replace('"', "")
+        for word in segment.get("words") or []:
+            if "start" not in word:
+                continue
+            words.append({
+                "text": word["word"].replace('"', ""),
+                "start": word["start"],
+                "duration": word["end"] - word["start"],
+                "sequence_id": i,
+                "sentence": sentence,
+            })
+
+    return pd.DataFrame(words)
 
 
 def _patch_tribev2_whisperx_cpu():
-    """Patch TRIBE's whisperx call for CPU (float32) and preinstalled whisperx."""
-    import json
-    import subprocess
-    import tempfile
+    """Replace tribev2's uvx whisperx subprocess with in-process transcription."""
     import tribev2.eventstransforms as et
 
     @staticmethod
     def _get_transcript_from_audio(wav_filename, language):
-        language_codes = dict(english="en", french="fr", spanish="es", dutch="nl", chinese="zh")
-        if language not in language_codes:
-            raise ValueError(f"Language {language} not supported")
-
-        device = _resolve_inference_device()
-        compute_type = "float16" if device == "cuda" else "float32"
-
-        with tempfile.TemporaryDirectory() as output_dir:
-            logger.info("Running whisperx...")
-            whisper_bin = _resolve_whisperx_bin()
-            whisper_cache = str(CACHE_ROOT / "whisper")
-            cmd = [
-                whisper_bin,
-                str(wav_filename),
-                "--model",
-                "large-v3",
-                "--language",
-                language_codes[language],
-                "--device",
-                device,
-                "--compute_type",
-                compute_type,
-                "--batch_size",
-                "4",
-                "--vad_method",
-                "silero",
-                "--align_model",
-                "WAV2VEC2_ASR_LARGE_LV60K_960H" if language == "english" else "",
-                "--model_dir",
-                whisper_cache,
-                "--model_cache_only",
-                "True",
-                "--output_dir",
-                output_dir,
-                "--output_format",
-                "json",
-            ]
-            cmd = [c for c in cmd if c]
-            env = _whisperx_env()
-            hf_token = os.environ.get("HF_TOKEN")
-            if hf_token:
-                cmd.extend(["--hf_token", hf_token])
-            result = subprocess.run(cmd, capture_output=True, text=True, env=env)
-            if result.returncode != 0:
-                raise RuntimeError(f"whisperx failed:\n{result.stderr}")
-
-            json_path = Path(output_dir) / f"{Path(wav_filename).stem}.json"
-            transcript = json.loads(json_path.read_text())
-
-            words = []
-            for i, segment in enumerate(transcript["segments"]):
-                sentence = segment["text"].replace('"', "")
-                for word in segment["words"]:
-                    if "start" not in word:
-                        continue
-                    words.append({
-                        "text": word["word"].replace('"', ""),
-                        "start": word["start"],
-                        "duration": word["end"] - word["start"],
-                        "sequence_id": i,
-                        "sentence": sentence,
-                    })
-
-            return pd.DataFrame(words)
+        try:
+            return _transcribe_audio_to_words(wav_filename, language)
+        except Exception as exc:
+            raise RuntimeError(f"whisperx failed:\n{exc}") from exc
 
     et.ExtractWordsFromAudio._get_transcript_from_audio = _get_transcript_from_audio
+    logger.info("Patched tribev2 ExtractWordsFromAudio (%s).", SERVER_BUILD)
 
 
 def _fallback_network_vectors():
@@ -299,6 +290,7 @@ def _load_model_and_networks():
         return
 
     try:
+        _patch_tribev2_whisperx_cpu()
         from tribev2 import TribeModel
         device = _resolve_inference_device()
         logger.info(f"Loading TribeModel on device: {device}...")
@@ -346,6 +338,7 @@ class StatusResponse(BaseModel):
     model: str
     device: str
     networks_mapped: list
+    server_build: str = SERVER_BUILD
 
 
 @app.get("/status", response_model=StatusResponse)
@@ -363,7 +356,8 @@ def get_status():
             status="loading",
             model="facebook/tribev2",
             device="unknown",
-            networks_mapped=[]
+            networks_mapped=[],
+            server_build=SERVER_BUILD,
         )
 
     if state == "loading_error" or current_model is None:
@@ -371,7 +365,8 @@ def get_status():
             status="loading_error",
             model="facebook/tribev2",
             device="unknown",
-            networks_mapped=[]
+            networks_mapped=[],
+            server_build=SERVER_BUILD,
         )
     
     device_str = _resolve_inference_device() if torch is not None else "unknown"
@@ -379,7 +374,8 @@ def get_status():
         status="ready",
         model="facebook/tribev2",
         device=device_str,
-        networks_mapped=list(vectors.keys())
+        networks_mapped=list(vectors.keys()),
+        server_build=SERVER_BUILD,
     )
 
 
