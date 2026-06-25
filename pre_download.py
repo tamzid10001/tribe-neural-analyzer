@@ -131,7 +131,7 @@ try:
     model.transcribe(audio, batch_size=1, language="en")
     print("WhisperX in-process warmup completed.")
 except Exception as e:
-    print(f"Error pre-downloading WhisperX models: {e}", file=sys.stderr)
-    sys.exit(1)
+    print(f"Warning: WhisperX pre-download skipped: {e}", file=sys.stderr)
+    print("Build continues — set HF_TOKEN and redeploy for speech transcription.", file=sys.stderr)
 
 print("=== Pre-download & Caching Stage Completed Successfully ===")
