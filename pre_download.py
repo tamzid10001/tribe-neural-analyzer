@@ -43,8 +43,32 @@ except Exception as e:
 try:
     print("3. Loading TRIBE v2 model & pre-downloading model weights...")
     from tribev2 import TribeModel
+    import torch
+
+    os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+    device = "cpu"
+    config_update = {
+        "data.text_feature.device": device,
+        "data.audio_feature.device": device,
+        "data.video_feature.image.device": device,
+        "data.image_feature.image.device": device,
+        "data.text_feature.infra.cluster": "processpool",
+        "data.audio_feature.infra.cluster": "processpool",
+        "data.video_feature.infra.cluster": "processpool",
+        "data.text_feature.infra.gpus_per_node": 0,
+        "data.audio_feature.infra.gpus_per_node": 0,
+        "data.video_feature.infra.gpus_per_node": 0,
+        "data.video_feature.image.infra.gpus_per_node": 0,
+        "data.image_feature.image.infra.gpus_per_node": 0,
+    }
     # This will load model, download best.ckpt and config.yaml, and instantiate feature extractors
-    model = TribeModel.from_pretrained("facebook/tribev2", cache_folder="/app/cache")
+    model = TribeModel.from_pretrained(
+        "facebook/tribev2",
+        cache_folder="/app/cache",
+        device=device,
+        cluster="processpool",
+        config_update=config_update,
+    )
     print("TRIBE v2 model and weights loaded & cached successfully.")
 except Exception as e:
     print(f"Error downloading TRIBE v2 weights/model: {e}", file=sys.stderr)

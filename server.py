@@ -28,6 +28,38 @@ os.environ["SUBJECTS_DIR"] = str(MNE_ROOT)
 for cache_dir in (CACHE_ROOT, MNE_ROOT, NILEARN_ROOT):
     cache_dir.mkdir(parents=True, exist_ok=True)
 
+
+def _resolve_inference_device() -> str:
+    """Pick torch device for TRIBE inference (Cloud Run is CPU-only)."""
+    if torch is None:
+        return "cpu"
+    force_cuda = os.environ.get("TRIBE_FORCE_CUDA", "").lower() in {"1", "true", "yes"}
+    if force_cuda and torch.cuda.is_available():
+        return "cuda"
+    if not torch.cuda.is_available():
+        os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+    return "cpu"
+
+
+def _tribev2_config_update(device: str) -> dict:
+    """Override HuggingFace config.yaml, which hardcodes device: cuda on extractors."""
+    cluster = "processpool"
+    return {
+        "data.text_feature.device": device,
+        "data.audio_feature.device": device,
+        "data.video_feature.image.device": device,
+        "data.image_feature.image.device": device,
+        "data.text_feature.infra.cluster": cluster,
+        "data.audio_feature.infra.cluster": cluster,
+        "data.video_feature.infra.cluster": cluster,
+        "data.text_feature.infra.gpus_per_node": 0,
+        "data.audio_feature.infra.gpus_per_node": 0,
+        "data.video_feature.infra.gpus_per_node": 0,
+        "data.video_feature.image.infra.gpus_per_node": 0,
+        "data.image_feature.image.infra.gpus_per_node": 0,
+    }
+
+
 # Import torch on the main thread before worker threads start.
 try:
     import torch
@@ -93,7 +125,7 @@ def _patch_tribev2_whisperx_cpu():
         if language not in language_codes:
             raise ValueError(f"Language {language} not supported")
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = _resolve_inference_device()
         compute_type = "float16" if device == "cuda" else "float32"
 
         with tempfile.TemporaryDirectory() as output_dir:
@@ -226,9 +258,15 @@ def _load_model_and_networks():
 
     try:
         from tribev2 import TribeModel
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = _resolve_inference_device()
         logger.info(f"Loading TribeModel on device: {device}...")
-        loaded_model = TribeModel.from_pretrained("facebook/tribev2", cache_folder=str(CACHE_ROOT), device=device)
+        loaded_model = TribeModel.from_pretrained(
+            "facebook/tribev2",
+            cache_folder=str(CACHE_ROOT),
+            device=device,
+            cluster="processpool",
+            config_update=_tribev2_config_update(device),
+        )
         logger.info("TribeModel loaded successfully.")
     except Exception as e:
         logger.error(f"Critical error loading TribeModel: {e}")
@@ -294,12 +332,7 @@ def get_status():
             networks_mapped=[]
         )
     
-    device_str = "unknown"
-    try:
-        import torch
-        device_str = "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        pass
+    device_str = _resolve_inference_device() if torch is not None else "unknown"
     return StatusResponse(
         status="ready",
         model="facebook/tribev2",
