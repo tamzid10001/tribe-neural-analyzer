@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=4" />
+  <link rel="stylesheet" href="style.css?v=5" />
 </head>
 <body>
 
@@ -80,18 +80,18 @@
             <div class="scan-action-left">
               <div class="engine-dropdown-container">
                 <button class="btn-engine-select" id="btn-engine-select" title="Inference engine" type="button">
-                  <span id="engine-display-label">TRIBE v2</span>
+                  <span id="engine-display-label">Google Cloud</span>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="10" height="12"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
                 <div class="engine-dropdown-menu hidden" id="engine-dropdown-menu">
                   <div class="engine-option active" id="option-cloud-run" data-mode="cloud">
                     <span class="option-check" aria-hidden="true"></span>
                     <div class="option-meta">
-                      <span class="option-title">TRIBE v2 Cloud</span>
-                      <span class="option-subtitle">Meta foundation model · full fMRI vertex prediction</span>
+                      <span class="option-title">TRIBE v2 · Google Cloud</span>
+                      <span class="option-subtitle">Meta foundation model on Cloud Run · full inference</span>
                     </div>
                   </div>
-                  <div class="engine-option" id="option-browser-sim" data-mode="sim">
+                  <div class="engine-option hidden" id="option-browser-sim" data-mode="sim">
                     <span class="option-check"></span>
                     <div class="option-meta">
                       <span class="option-title">Browser Simulation</span>
@@ -128,7 +128,7 @@
         <button class="btn-drawer-close" id="btn-drawer-close" type="button" aria-label="Close">Close</button>
       </div>
       <div class="drawer-content">
-        <p class="drawer-description">Backend URL for TRIBE v2 Cloud Run. OIDC token is only needed if the service is not public.</p>
+        <p class="drawer-description">Google Cloud Run backend for TRIBE v2. When using the hosted app, this defaults to the same Cloud Run URL.</p>
         <div class="settings-group">
           <label for="backend-url-input">Backend Service URL</label>
           <input type="text" id="backend-url-input" placeholder="https://tribe-backend-351432107547.us-central1.run.app" />
@@ -149,6 +149,6 @@
   <audio id="hidden-audio" crossorigin="anonymous" style="display:none"></audio>
 
   <!-- Application core JS -->
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>

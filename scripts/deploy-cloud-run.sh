@@ -13,11 +13,17 @@ if ! command -v gcloud >/dev/null 2>&1; then
 fi
 
 if [[ -z "${HF_TOKEN:-}" || "${HF_TOKEN}" == "hf_your_token_here" ]]; then
-  echo "Error: You need a real HuggingFace token (not the placeholder)."
-  echo "  1. Create one at https://huggingface.co/settings/tokens"
-  echo "  2. export HF_TOKEN=hf_xxxxxxxxxxxxxxxx"
-  echo "  3. bash scripts/deploy-cloud-run.sh"
-  exit 1
+  if [[ "${ALLOW_DEPLOY_WITHOUT_HF_TOKEN:-}" == "1" ]]; then
+    echo "Warning: HF_TOKEN not set. Build may fail or /analyze may hit HuggingFace rate limits."
+  else
+    echo "Error: You need a real HuggingFace token (not the placeholder)."
+    echo "  1. Create one at https://huggingface.co/settings/tokens"
+    echo "  2. export HF_TOKEN=hf_xxxxxxxxxxxxxxxx"
+    echo "  3. bash scripts/deploy-cloud-run.sh"
+    echo ""
+    echo "To deploy UI-only without token (not recommended): ALLOW_DEPLOY_WITHOUT_HF_TOKEN=1 bash scripts/deploy-cloud-run.sh"
+    exit 1
+  fi
 fi
 
 echo "Building ${IMAGE} ..."

@@ -118,6 +118,10 @@
   var CLOUD_BACKEND_URL = 'https://tribe-backend-351432107547.us-central1.run.app';
 
   function getDefaultBackendUrl() {
+    var host = window.location.hostname || '';
+    if (host.endsWith('.run.app') || host.endsWith('.googleusercontent.com')) {
+      return window.location.origin;
+    }
     return CLOUD_BACKEND_URL;
   }
 
@@ -347,26 +351,19 @@
     }
 
     function updateEngineMode(mode) {
-      engineMode = mode;
-      localStorage.setItem('tribe_engine_mode', mode);
-      if (mode === 'cloud') {
-        if (displayLabel) displayLabel.textContent = 'TRIBE v2';
-        if (optionCloud) optionCloud.classList.add('active');
-        if (optionSim) optionSim.classList.remove('active');
-      } else {
-        if (displayLabel) displayLabel.textContent = 'Browser Sim';
-        if (optionSim) optionSim.classList.add('active');
-        if (optionCloud) optionCloud.classList.remove('active');
-      }
+      engineMode = 'cloud';
+      localStorage.setItem('tribe_engine_mode', 'cloud');
+      if (displayLabel) displayLabel.textContent = 'Google Cloud';
+      if (optionCloud) optionCloud.classList.add('active');
+      if (optionSim) optionSim.classList.remove('active');
       document.querySelectorAll('.engine-option').forEach(function (opt) {
         opt.classList.toggle('selected', opt.classList.contains('active'));
       });
     }
 
     if (optionCloud) optionCloud.addEventListener('click', function () { updateEngineMode('cloud'); });
-    if (optionSim) optionSim.addEventListener('click', function () { updateEngineMode('sim'); });
 
-    updateEngineMode(localStorage.getItem('tribe_engine_mode') || 'cloud');
+    updateEngineMode('cloud');
     setStimulusMode(localStorage.getItem('tribe_stimulus_mode') || 'video');
 
     var serverStatus = $('server-status');
@@ -2622,7 +2619,11 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
         var data = await res.json();
         if (data && data.status === 'ready') {
           statusDot.className = 'status-dot online';
-          statusText.textContent = 'Cloud Online';
+          if (data.server_build) {
+            statusText.textContent = 'Google Cloud · ' + data.server_build;
+          } else {
+            statusText.textContent = 'Google Cloud Online';
+          }
         } else if (data && data.status === 'loading') {
           statusDot.className = 'status-dot checking';
           statusText.textContent = 'Model Loading...';

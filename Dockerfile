@@ -59,9 +59,12 @@ RUN pip install --no-cache-dir --force-reinstall \
     torch torchvision torchaudio \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Copy pre-download caching script and application server code
+# Copy application code and UI (served from same Cloud Run service)
 COPY pre_download.py /app/pre_download.py
 COPY server.py /app/server.py
+COPY index.html /app/index.html
+COPY app.js /app/app.js
+COPY style.css /app/style.css
 
 # Run the pre-download script during the build phase to bake weights and datasets into the image.
 # Optional: pass HF token for gated models / higher rate limits during build.
