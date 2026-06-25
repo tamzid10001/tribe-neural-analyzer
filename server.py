@@ -244,6 +244,7 @@ def _load_model_and_networks():
         model_load_state = "ready"
         model_load_error = None
     logger.info("TRIBE v2 backend is ready.")
+    threading.Thread(target=_refine_network_vectors, daemon=True).start()
 
 
 @app.on_event("startup")
@@ -253,10 +254,11 @@ def startup_event():
         if _load_started:
             return
         _load_started = True
-    _patch_tribev2_whisperx_cpu()
-    _load_model_and_networks()
-    if model_load_state == "ready":
-        threading.Thread(target=_refine_network_vectors, daemon=True).start()
+    try:
+        _patch_tribev2_whisperx_cpu()
+    except Exception as e:
+        logger.warning(f"whisperx patch skipped: {e}")
+    threading.Thread(target=_load_model_and_networks, daemon=True).start()
 
 
 class StatusResponse(BaseModel):
