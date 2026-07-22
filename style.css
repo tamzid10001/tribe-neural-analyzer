@@ -4,35 +4,38 @@
 
 /* ── CSS Custom Properties ──────────────────────────────────── */
 :root {
-  /* Pristine Gemini Light Theme Backgrounds */
-  --bg-deep:        #ffffff;
-  --bg-surface:     #ffffff;
-  --bg-surface-alt: transparent;
-  --bg-elevated:    #ffffff;
-  --bg-input:       transparent;
+  color-scheme: dark;
 
-  /* Accent Colors */
-  --clr-blue:    #1a73e8;
-  --clr-violet:  #7c4dff;
-  --clr-magenta: #e91e63;
-  
+  /* Deep Space Dark Theme Backgrounds */
+  --bg-deep:        #0a0c10;  /* app canvas */
+  --bg-surface:     #14171d;  /* cards & panels */
+  --bg-surface-alt: rgba(255, 255, 255, 0.02);
+  --bg-elevated:    #1b1f27;  /* popups, drawer */
+  --bg-input:       rgba(255, 255, 255, 0.03);
+
+  /* Accent Colors (brightened for dark backgrounds) */
+  --clr-blue:    #5b9dff;
+  --clr-violet:  #a385ff;
+  --clr-magenta: #ff5c8a;
+  --accent-grad: linear-gradient(135deg, #5b9dff, #a385ff);
+
   /* Text */
-  --text-primary:   #1f1f1f;
-  --text-secondary: #444746;
-  --text-muted:     #747775;
+  --text-primary:   #eceef2;
+  --text-secondary: #b6bbc4;
+  --text-muted:     #838994;
 
   /* Semantic */
-  --clr-success:  #0f9d58;
-  --clr-warning:  #f4b400;
-  --clr-danger:   #db4437;
+  --clr-success:  #34d399;
+  --clr-warning:  #fbbf24;
+  --clr-danger:   #f87171;
 
   /* Borders & Shadows */
-  --border-light:   rgba(0, 0, 0, 0.08);
-  --border-hover:   rgba(124, 77, 255, 0.15);
-  --border-active:  rgba(124, 77, 255, 0.3);
+  --border-light:   rgba(255, 255, 255, 0.10);
+  --border-hover:   rgba(163, 133, 255, 0.35);
+  --border-active:  rgba(163, 133, 255, 0.55);
 
-  --shadow-card:  none;
-  --shadow-popup: none;
+  --shadow-card:  0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-popup: 0 12px 40px rgba(0, 0, 0, 0.6);
 
   /* Radii */
   --radius-sm:   8px;
@@ -120,12 +123,17 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-pill);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+::selection {
+  background: rgba(163, 133, 255, 0.35);
+  color: #fff;
 }
 
 /* Utility classes */
@@ -300,7 +308,7 @@ textarea {
 }
 
 .btn-settings-toggle:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.06);
   color: var(--clr-blue);
 }
 
@@ -421,7 +429,7 @@ textarea {
 .think-step::before {
   content: "•";
   font-size: 1.1rem;
-  color: rgba(0, 0, 0, 0.08);
+  color: rgba(255, 255, 255, 0.2);
 }
 
 .think-step.active {
@@ -491,7 +499,7 @@ textarea {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--border-light);
   padding-bottom: 0.4rem;
 }
 
@@ -589,7 +597,7 @@ textarea {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
-  border-top: 1px dashed rgba(0, 0, 0, 0.06);
+  border-top: 1px dashed var(--border-light);
   padding-top: 1rem;
 }
 
@@ -700,7 +708,7 @@ textarea {
   font-weight: 600;
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-pill);
-  background: rgba(124,77,255,0.06);
+  background: rgba(163, 133, 255, 0.16);
   color: var(--clr-violet);
 }
 
@@ -750,7 +758,7 @@ textarea {
 
 .raw-bar-fill-track {
   height: 6px;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.08);
   border-radius: var(--radius-pill);
   overflow: hidden;
 }
@@ -784,7 +792,7 @@ textarea {
 }
 
 .timeline-annotations {
-  border-top: 1px dashed rgba(0,0,0,0.06);
+  border-top: 1px dashed var(--border-light);
   padding-top: 0.75rem;
   display: flex;
   flex-direction: column;
@@ -802,7 +810,7 @@ textarea {
   font-family: var(--font-mono);
   font-weight: 600;
   color: var(--clr-violet);
-  background: rgba(124,77,255,0.06);
+  background: rgba(163, 133, 255, 0.16);
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
   flex-shrink: 0;
@@ -1032,7 +1040,7 @@ textarea {
 
 .btn-pill-remove:hover,
 .btn-attachment-remove:hover {
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--clr-danger);
 }
 
@@ -1080,10 +1088,10 @@ textarea {
   position: absolute;
   bottom: calc(100% + 10px);
   left: 0;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border: 1px solid var(--border-light);
   border-radius: 0;
-  box-shadow: none;
+  box-shadow: var(--shadow-popup);
   padding: 8px;
   width: 300px;
   z-index: 200;
@@ -1138,16 +1146,16 @@ textarea {
   font-size: 0.82rem;
   font-weight: 700;
   color: #ffffff;
-  background: var(--text-primary);
-  border: 1px solid var(--text-primary);
-  box-shadow: none;
+  background: var(--accent-grad);
+  border: 1px solid transparent;
+  box-shadow: 0 2px 12px rgba(91, 157, 255, 0.25);
+  transition: filter var(--transition-base), box-shadow var(--transition-base);
 }
 
 .btn-scan:hover:not(.disabled) {
   transform: none;
-  background: var(--text-secondary);
-  border-color: var(--text-secondary);
-  box-shadow: none;
+  filter: brightness(1.12);
+  box-shadow: 0 4px 18px rgba(91, 157, 255, 0.4);
 }
 
 .scan-action-left {
@@ -1254,6 +1262,8 @@ textarea {
   border: 1px solid var(--border-light) !important;
   border-radius: 0 !important;
 }
+
+.scan-footnote {
   font-size: 0.68rem;
   color: var(--text-muted);
   text-align: center;
@@ -1276,14 +1286,14 @@ textarea {
   right: -340px;
   width: 340px;
   height: 100vh;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-left: 1px solid var(--border-light);
   z-index: 300;
   padding: 24px;
   display: flex;
   flex-direction: column;
   gap: 20px;
-  box-shadow: none;
+  box-shadow: var(--shadow-popup);
   transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1296,7 +1306,7 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  border-bottom: 1px solid var(--border-light);
   padding-bottom: 12px;
 }
 
@@ -1349,7 +1359,7 @@ textarea {
 }
 
 .settings-group input:focus, .settings-group textarea:focus {
-  border-color: rgba(26, 115, 232, 0.3);
+  border-color: var(--clr-blue);
 }
 
 .settings-group textarea {
@@ -1359,19 +1369,19 @@ textarea {
 }
 
 .btn-save-settings {
-  background: var(--text-primary);
+  background: var(--accent-grad);
   color: #ffffff;
   font-weight: 600;
   font-size: 0.88rem;
   padding: 10px;
   border-radius: 0;
-  border: 1px solid var(--text-primary);
+  border: 1px solid transparent;
   text-align: center;
+  transition: filter var(--transition-base);
 }
 
 .btn-save-settings:hover {
-  background: var(--text-secondary);
-  border-color: var(--text-secondary);
+  filter: brightness(1.12);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1430,4 +1440,46 @@ textarea {
 @keyframes rotating-brain {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   DARK MODE ELEVATION — give flat surfaces subtle depth over the
+   deep canvas so cards read as panels rather than bare outlines
+   ═══════════════════════════════════════════════════════════════ */
+.thinking-tracker,
+.score-hero-card,
+.gauge-visual-card,
+.brain-map-wrapper,
+.active-roi-card,
+.raw-bars-container,
+.timeline-block,
+.insights-block,
+.insight-card,
+.methodology-disclaimer,
+.scan-composer,
+.chat-message.user .message-content {
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* Keep the pinned chat-mode composer flush with the deep canvas */
+#app-container.state-chat .scan-composer {
+  background: var(--bg-elevated);
+}
+
+.scan-composer:focus-within {
+  border-color: var(--border-active);
+}
+
+.stimulus-dropzone {
+  background: var(--bg-input);
+}
+
+.stimulus-dropzone.drag-over {
+  border-color: var(--clr-violet);
+  background: rgba(163, 133, 255, 0.08);
+}
+
+.server-status-container {
+  background: var(--bg-surface);
 }

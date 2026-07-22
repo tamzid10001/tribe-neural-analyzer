@@ -369,9 +369,13 @@
     var serverStatus = $('server-status');
     var drawer = $('settings-drawer');
     var drawerClose = $('btn-drawer-close');
+    var settingsToggle = $('btn-settings-toggle');
     if (serverStatus && drawer) {
       serverStatus.style.cursor = 'pointer';
       serverStatus.addEventListener('click', function () { drawer.classList.toggle('active'); });
+    }
+    if (settingsToggle && drawer) {
+      settingsToggle.addEventListener('click', function () { drawer.classList.toggle('active'); });
     }
     if (drawerClose && drawer) {
       drawerClose.addEventListener('click', function () { drawer.classList.remove('active'); });
@@ -553,7 +557,7 @@
         '<div class="gauge-visual-card">' +
           '<div class="gauge-svg-container">' +
             '<svg viewBox="0 0 120 120" width="140" height="140">' +
-              '<circle cx="60" cy="60" r="55" fill="none" stroke="rgba(0,0,0,0.05)" stroke-width="8" transform="rotate(-90 60 60)"/>' +
+              '<circle cx="60" cy="60" r="55" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8" transform="rotate(-90 60 60)"/>' +
               '<circle id="gauge-foreground' + suffix + '" cx="60" cy="60" r="55" fill="none" stroke="url(#gauge-grad' + suffix + ')" stroke-width="8" stroke-dasharray="345.5" stroke-dashoffset="345.5" stroke-linecap="round" transform="rotate(-90 60 60)" style="transition: stroke-dashoffset 1.2s ease;"/>' +
             '</svg>' +
             '<svg style="position:absolute;width:0;height:0;"><defs><linearGradient id="gauge-grad' + suffix + '" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#7c4dff"/><stop offset="100%" stop-color="#1a73e8"/></linearGradient></defs></svg>' +
@@ -1340,7 +1344,7 @@
       label.setAttribute('x', pos.x);
       label.setAttribute('y', pos.y + 26);
       label.setAttribute('text-anchor', 'middle');
-      label.setAttribute('fill', 'rgba(0,0,0,0.45)');
+      label.setAttribute('fill', 'rgba(255,255,255,0.6)');
       label.setAttribute('font-size', '10');
       label.setAttribute('font-weight', '600');
       label.setAttribute('font-family', 'Outfit, sans-serif');
@@ -1533,8 +1537,8 @@
 
       ctx.clearRect(0, 0, displayW, displayH);
 
-      // Light-Theme Premium Gridlines
-      ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+      // Dark-Theme Premium Gridlines
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1;
       [0.25, 0.5, 0.75].forEach(function (v) {
         ctx.beginPath();
@@ -1557,8 +1561,8 @@
         ctx.fillText('Onset Zone (1.6× weight)', x0 + 4, padT + 12);
       }
 
-      // Y-axis labels (Dark typography contrast)
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
+      // Y-axis labels (light typography for dark canvas)
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
       ctx.font = '600 10px JetBrains Mono, monospace';
       ctx.textAlign = 'right';
       [0, 0.25, 0.50, 0.75, 1.00].forEach(function (v) {
@@ -2009,7 +2013,7 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
       row.style.justifyContent = 'space-between';
       row.style.fontSize = '0.8rem';
       row.style.padding = '0.2rem 0';
-      row.style.borderBottom = '1px solid rgba(0,0,0,0.03)';
+      row.style.borderBottom = '1px solid rgba(255,255,255,0.06)';
 
       var left = document.createElement('div');
       left.style.display = 'flex';
@@ -2071,7 +2075,7 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
     // Insert current content benchmark row
     var contentRow = document.createElement('div');
     contentRow.className = 'archetype-row current-content';
-    contentRow.style.cssText = 'border:1px solid rgba(0,0,0,0.08); padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center;';
+    contentRow.style.cssText = 'border:1px solid rgba(255,255,255,0.12); padding:0.75rem 1rem; display:flex; justify-content:space-between; align-items:center;';
     contentRow.innerHTML = '<div class="archetype-info"><div class="archetype-name" style="font-size:0.85rem; font-weight:700; color:var(--text-primary);">This Video</div><div class="archetype-desc" style="font-size:0.75rem; color:var(--text-muted);">(your analyzed content)</div></div><div class="archetype-score-badge" style="font-family:var(--font-mono); font-size:1.1rem; font-weight:800; color:var(--clr-violet);">' + viralityResult.score + '</div>';
     
     var inserted = false;
@@ -2082,7 +2086,7 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
       }
       var row = document.createElement('div');
       row.className = 'archetype-row' + (arch === archMatch.closest ? ' active' : '');
-      row.style.cssText = 'border:1px solid rgba(0,0,0,0.08); padding:0.6rem 1rem; display:flex; justify-content:space-between; align-items:center; background:transparent;';
+      row.style.cssText = 'border:1px solid rgba(255,255,255,0.12); padding:0.6rem 1rem; display:flex; justify-content:space-between; align-items:center; background:transparent;';
       if (arch === archMatch.closest) {
         row.style.borderColor = 'rgba(124,77,255,0.15)';
         row.style.background = 'rgba(124,77,255,0.02)';
