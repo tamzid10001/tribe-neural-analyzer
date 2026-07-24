@@ -146,6 +146,9 @@
   var messageCounter = 0;
   var backendUrl = getDefaultBackendUrl();
   var backendToken = '';
+  var lastNetworkResult = null;      // raw activation payload from the most recent scan (for export lens)
+  var selectedLenses = ['brain'];    // active analysis lenses
+  var brainRenderers = {};           // suffix -> { stop } for WebGL brain animation cleanup
 
   function formatCloudHttpError(status, detail) {
     if (status === 403) {
@@ -238,10 +241,6 @@
       if (fileUploader) fileUploader.accept = cfg.accept;
       if (scriptRow) scriptRow.classList.add('hidden');
       if (btnMic) btnMic.classList.add('hidden');
-      if (textarea) {
-        textarea.value = '';
-        textarea.style.height = 'auto';
-      }
     }
 
     toggleSendButton();
@@ -353,7 +352,7 @@
     function updateEngineMode(mode) {
       engineMode = 'cloud';
       localStorage.setItem('tribe_engine_mode', 'cloud');
-      if (displayLabel) displayLabel.textContent = 'Google Cloud';
+      if (displayLabel) displayLabel.textContent = 'Qualia';
       if (optionCloud) optionCloud.classList.add('active');
       if (optionSim) optionSim.classList.remove('active');
       document.querySelectorAll('.engine-option').forEach(function (opt) {
@@ -550,8 +549,8 @@
           '<div class="aim-mini-grid">' +
             '<div class="mini-stat-item"><span>Reward (NAcc)</span><span class="mini-stat-val" id="aim-mini-nacc' + suffix + '">—</span></div>' +
             '<div class="mini-stat-item"><span>Aversion (AIns)</span><span class="mini-stat-val" id="aim-mini-ains' + suffix + '">—</span></div>' +
-            '<div class="mini-stat-item"><span>Value (MPFC)</span><span class="mini-stat-val" id="aim-mini-mpfc' + suffix + '">—</span></div>' +
-            '<div class="mini-stat-item"><span>Attention (PCC)</span><span class="mini-stat-val" id="aim-mini-pcc' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item"><span>Value (mPFC)</span><span class="mini-stat-val" id="aim-mini-mpfc' + suffix + '">—</span></div>' +
+            '<div class="mini-stat-item"><span>Social (STS)</span><span class="mini-stat-val" id="aim-mini-social' + suffix + '">—</span></div>' +
           '</div>' +
         '</div>' +
         '<div class="gauge-visual-card">' +
@@ -1235,9 +1234,194 @@
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // MODULE 6: SVG BRAIN MAP VISUALIZATION
+  // MODULE 6: 3D fMRI CORTEX — WebGL raymarched, falls back to SVG
   // ═══════════════════════════════════════════════════════════════
+  // Approximate cortical-surface coordinates (brain space) for each ROI.
+  var BRAIN_ROI_3D = {
+    V1:   [ 0.00,  0.12, -1.18],
+    FFA:  [ 0.55, -0.44, -0.46],
+    EBA:  [ 0.80,  0.04, -0.56],
+    PPA:  [ 0.40, -0.52, -0.34],
+    STS:  [ 0.94, -0.06,  0.06],
+    LANG: [-0.82,  0.12,  0.34],
+    DMN:  [ 0.00,  0.44,  0.94],
+    NAcc: [ 0.18, -0.30,  0.52],
+    AIns: [ 0.62,  0.00,  0.28],
+  };
+
+  var BRAIN_VS = 'attribute vec2 aPos; void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }';
+
+  var BRAIN_FS = [
+    'precision highp float;',
+    'uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uDark;',
+    'uniform vec3 uROI[9]; uniform vec3 uCol[9]; uniform float uAct[9];',
+    'float hash(vec3 p){ p=fract(p*0.3183099+0.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }',
+    'float vnoise(vec3 x){ vec3 i=floor(x), f=fract(x); f=f*f*(3.0-2.0*f);',
+    '  return mix(mix(mix(hash(i+vec3(0.,0.,0.)),hash(i+vec3(1.,0.,0.)),f.x),',
+    '                 mix(hash(i+vec3(0.,1.,0.)),hash(i+vec3(1.,1.,0.)),f.x),f.y),',
+    '             mix(mix(hash(i+vec3(0.,0.,1.)),hash(i+vec3(1.,0.,1.)),f.x),',
+    '                 mix(hash(i+vec3(0.,1.,1.)),hash(i+vec3(1.,1.,1.)),f.x),f.y),f.z); }',
+    'float fbm(vec3 p){ float a=0.5,s=0.0; for(int i=0;i<4;i++){ s+=a*vnoise(p); p*=2.02; a*=0.5;} return s; }',
+    'float ridged(vec3 p){ float n=fbm(p); return 1.0-abs(n*2.0-1.0); }',
+    'float sdBrain(vec3 p){ vec3 q=p; q.x/=1.16; q.y/=0.90; q.z/=1.28; float r=length(q)-1.0;',
+    '  r-=0.055*ridged(p*3.7); r-=0.020*ridged(p*7.6); r+=0.014*sin(p.y*26.0+fbm(p*4.0)*7.0);',
+    '  float fis=smoothstep(0.17,0.0,abs(p.x))*smoothstep(-0.35,0.66,p.y); r+=0.14*fis; return r*0.82; }',
+    'vec3 calcNormal(vec3 p){ vec2 e=vec2(0.003,0.0); return normalize(vec3(',
+    '  sdBrain(p+e.xyy)-sdBrain(p-e.xyy), sdBrain(p+e.yxy)-sdBrain(p-e.yxy), sdBrain(p+e.yyx)-sdBrain(p-e.yyx))); }',
+    'mat3 rotY(float a){ float c=cos(a),s=sin(a); return mat3(c,0.,-s, 0.,1.,0., s,0.,c); }',
+    'mat3 rotX(float a){ float c=cos(a),s=sin(a); return mat3(1.,0.,0., 0.,c,-s, 0.,s,c); }',
+    'void main(){ vec2 uv=(gl_FragCoord.xy-0.5*uRes)/uRes.y;',
+    '  vec3 ro=vec3(0.0,0.0,3.2); vec3 rd=normalize(vec3(uv,-1.7));',
+    '  float yaw=uTime*0.25+uRot.x; float pit=uRot.y; mat3 rot=rotX(pit)*rotY(yaw);',
+    '  ro=rot*ro; rd=rot*rd;',
+    '  float t=0.0; bool hit=false; vec3 p=ro;',
+    '  for(int i=0;i<96;i++){ p=ro+rd*t; float d=sdBrain(p); if(d<0.0012){ hit=true; break; } t+=d*0.5; if(t>6.0) break; }',
+    '  if(!hit){ gl_FragColor=vec4(0.0); return; }',
+    '  vec3 n=calcNormal(p); vec3 L=normalize(vec3(0.55,0.8,0.55));',
+    '  float diff=clamp(dot(n,L),0.0,1.0); float fres=pow(1.0-clamp(dot(n,-rd),0.0,1.0),2.5);',
+    '  vec3 tissue=mix(vec3(0.87,0.80,0.82), vec3(0.33,0.29,0.36), uDark);',
+    '  float spec=pow(clamp(dot(reflect(-L,n),-rd),0.0,1.0),22.0)*0.22;',
+    '  vec3 col=tissue*(0.30+diff*0.9)+spec*mix(vec3(1.0),vec3(0.75,0.82,1.0),uDark);',
+    '  float ao=smoothstep(0.15,0.85,ridged(p*3.7)); col*=0.68+0.32*ao;',
+    '  vec3 heat=vec3(0.0); float heatA=0.0;',
+    '  for(int i=0;i<9;i++){ float dd=distance(p,uROI[i]); float w=exp(-dd*dd/0.055)*uAct[i]; heat+=uCol[i]*w; heatA=max(heatA,w); }',
+    '  col=mix(col, col*0.25+heat*1.9, clamp(heatA*1.4,0.0,0.94)); col+=heat*0.6;',
+    '  col+=fres*mix(vec3(0.10),vec3(0.28,0.32,0.52),uDark); col=pow(max(col,0.0), vec3(0.9));',
+    '  gl_FragColor=vec4(col,1.0); }',
+  ].join('\n');
+
+  function hexToRgb01(hex) {
+    hex = (hex || '#888888').replace('#', '');
+    if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    var n = parseInt(hex, 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+
+  function renderBrainLegend(summary, suffix) {
+    var legendEl = $('network-legend', suffix);
+    if (!legendEl) return;
+    legendEl.innerHTML = '';
+    NETWORKS.forEach(function (net) {
+      var activation = summary[net.id] || 0;
+      var item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'legend-item';
+      item.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin:2px 8px;font-size:11px;font-weight:500;color:var(--text-secondary);background:none;border:none;cursor:pointer;';
+      var dot = document.createElement('span');
+      dot.style.cssText = 'width:8px;height:8px;border-radius:50%;display:inline-block;background:' + net.color + ';';
+      item.appendChild(dot);
+      item.appendChild(document.createTextNode(net.id));
+      item.addEventListener('click', function () {
+        var an = $('roi-active-name', suffix), av = $('roi-active-value', suffix), ad = $('roi-active-desc', suffix);
+        if (an) an.textContent = net.name;
+        if (av) av.textContent = (activation * 100).toFixed(1) + '%';
+        if (ad) ad.textContent = REGION_DESCS[net.id] || '';
+      });
+      legendEl.appendChild(item);
+    });
+  }
+
   function renderBrainMap(summary, suffix) {
+    var container = $('brain-map-container', suffix);
+    if (!container) return;
+    if (brainRenderers[suffix] && brainRenderers[suffix].stop) { brainRenderers[suffix].stop(); }
+    container.innerHTML = '';
+    container.style.position = 'relative';
+
+    var canvas = document.createElement('canvas');
+    canvas.className = 'brain-gl-canvas';
+    canvas.style.width = '100%';
+    canvas.style.height = '280px';
+    canvas.style.display = 'block';
+    canvas.style.cursor = 'grab';
+    canvas.style.touchAction = 'none';
+    container.appendChild(canvas);
+
+    var gl = null;
+    try { gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl'); } catch (e) { gl = null; }
+    if (!gl) { container.innerHTML = ''; renderBrainMapSVG(summary, suffix); return; }
+
+    function compile(type, src) {
+      var s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) { console.warn('brain shader:', gl.getShaderInfoLog(s)); gl.deleteShader(s); return null; }
+      return s;
+    }
+    var vs = compile(gl.VERTEX_SHADER, BRAIN_VS);
+    var fs = compile(gl.FRAGMENT_SHADER, BRAIN_FS);
+    if (!vs || !fs) { container.innerHTML = ''; renderBrainMapSVG(summary, suffix); return; }
+    var prog = gl.createProgram();
+    gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { container.innerHTML = ''; renderBrainMapSVG(summary, suffix); return; }
+    gl.useProgram(prog);
+
+    var buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    var aPos = gl.getAttribLocation(prog, 'aPos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    var uRes = gl.getUniformLocation(prog, 'uRes');
+    var uTime = gl.getUniformLocation(prog, 'uTime');
+    var uRot = gl.getUniformLocation(prog, 'uRot');
+    var uDark = gl.getUniformLocation(prog, 'uDark');
+    var uROI = gl.getUniformLocation(prog, 'uROI');
+    var uCol = gl.getUniformLocation(prog, 'uCol');
+    var uAct = gl.getUniformLocation(prog, 'uAct');
+
+    var roiArr = new Float32Array(27), colArr = new Float32Array(27), actArr = new Float32Array(9);
+    NETWORKS.forEach(function (net, i) {
+      var pos = BRAIN_ROI_3D[net.id] || [0, 0, 0];
+      roiArr[i * 3] = pos[0]; roiArr[i * 3 + 1] = pos[1]; roiArr[i * 3 + 2] = pos[2];
+      var c = hexToRgb01(net.color);
+      colArr[i * 3] = c[0]; colArr[i * 3 + 1] = c[1]; colArr[i * 3 + 2] = c[2];
+      actArr[i] = clamp(summary[net.id] || 0, 0, 1);
+    });
+
+    var rotX = 0, rotY = 0, dragging = false, lx = 0, ly = 0;
+    canvas.addEventListener('pointerdown', function (e) { dragging = true; lx = e.clientX; ly = e.clientY; canvas.style.cursor = 'grabbing'; try { canvas.setPointerCapture(e.pointerId); } catch (er) {} });
+    canvas.addEventListener('pointermove', function (e) { if (!dragging) return; rotX += (e.clientX - lx) * 0.01; rotY = clamp(rotY + (e.clientY - ly) * 0.01, -1.2, 1.2); lx = e.clientX; ly = e.clientY; });
+    canvas.addEventListener('pointerup', function () { dragging = false; canvas.style.cursor = 'grab'; });
+    canvas.addEventListener('pointerleave', function () { dragging = false; });
+
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.75);
+    function resize() {
+      var w = container.clientWidth || 320, h = 280;
+      canvas.width = Math.max(1, Math.floor(w * dpr));
+      canvas.height = Math.max(1, Math.floor(h * dpr));
+      gl.viewport(0, 0, canvas.width, canvas.height);
+    }
+    resize();
+    var onResize = function () { resize(); };
+    window.addEventListener('resize', onResize);
+
+    var start = (window.performance && performance.now) ? performance.now() : 0;
+    var raf = 0, stopped = false;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function isDark() { return (document.documentElement.getAttribute('data-theme') || 'dark') !== 'light'; }
+    function frame(now) {
+      if (stopped) return;
+      var t = reduce ? 6.0 : ((now - start) / 1000);
+      gl.uniform2f(uRes, canvas.width, canvas.height);
+      gl.uniform1f(uTime, t);
+      gl.uniform2f(uRot, rotX, rotY);
+      gl.uniform1f(uDark, isDark() ? 1.0 : 0.0);
+      if (uROI) gl.uniform3fv(uROI, roiArr);
+      if (uCol) gl.uniform3fv(uCol, colArr);
+      if (uAct) gl.uniform1fv(uAct, actArr);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (!reduce) raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+
+    brainRenderers[suffix] = { stop: function () { stopped = true; if (raf) cancelAnimationFrame(raf); window.removeEventListener('resize', onResize); } };
+
+    renderBrainLegend(summary, suffix);
+  }
+
+  // ── SVG fallback (used when WebGL is unavailable) ──────────────
+  function renderBrainMapSVG(summary, suffix) {
     var container = $('brain-map-container', suffix);
     if (!container) return;
     container.innerHTML = '';
@@ -1979,12 +2163,15 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
     var miniNacc = $('aim-mini-nacc', suffix);
     var miniAins = $('aim-mini-ains', suffix);
     var miniMpfc = $('aim-mini-mpfc', suffix);
-    var miniPcc = $('aim-mini-pcc', suffix);
+    var miniSocial = $('aim-mini-social', suffix);
 
     if (miniNacc) miniNacc.textContent = Math.round(viralityResult.onsetNAcc * 100) + '%';
     if (miniAins) miniAins.textContent = Math.round(viralityResult.onsetAIns * 100) + '%';
+    // Value ← mPFC, read from the default-mode network (mPFC is a core DMN node).
     if (miniMpfc) miniMpfc.textContent = Math.round((summary.DMN || 0) * 100) + '%';
-    if (miniPcc) miniPcc.textContent = Math.round((summary.LANG || 0) * 100) + '%';
+    // Social ← STS (superior temporal sulcus). Previously mislabeled "Attention (PCC)"
+    // while being fed the language network; now label and source agree.
+    if (miniSocial) miniSocial.textContent = Math.round((summary.STS || 0) * 100) + '%';
 
     var lever = findBiggestLever(summary, viralityResult);
     var leverTitle = $('lever-title', suffix);
@@ -2272,6 +2459,9 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
           var mediaTypeReturned = serverData.mediaType;
 
           var viralityResult = computeViralityScore(networkResult.perSecond, duration);
+
+          // Capture the raw activation payload for the "Raw model export" lens.
+          lastNetworkResult = { networkResult: networkResult, duration: duration, mediaType: mediaTypeReturned };
 
           // Reveal Report & Hide Loader inside AI message bubble
           var tracker = $('thinking-tracker', suffix);
@@ -2658,11 +2848,312 @@ tag: 'Audio', color1: '#14b8a6', color2: '#06b6d4',
   }
 
   // ═══════════════════════════════════════════════════════════════
+  // MODULE 16: SAPIENT SHELL — theme, sidebar, quick-start, lenses
+  // ═══════════════════════════════════════════════════════════════
+  var toastEl = null, toastTimer = null;
+  function showToast(msg) {
+    if (!toastEl) {
+      toastEl = document.createElement('div');
+      toastEl.className = 'app-toast';
+      document.body.appendChild(toastEl);
+    }
+    toastEl.textContent = msg;
+    void toastEl.offsetWidth;
+    toastEl.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove('show'); }, 2600);
+  }
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('tribe_theme', theme);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', theme === 'light' ? '#ffffff' : '#0a0a0b');
+  }
+
+  function initTheme() {
+    var saved = localStorage.getItem('tribe_theme');
+    if (saved !== 'light' && saved !== 'dark') saved = 'dark';
+    applyTheme(saved);
+  }
+
+  function initWaveform() {
+    var canvas = $('waveform-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var colors = NETWORKS.map(function (n) { return n.color; });
+    var N = 64;
+    function resize() {
+      var w = canvas.clientWidth || 380, h = canvas.clientHeight || 54;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+    var start = (window.performance && performance.now) ? performance.now() : 0;
+    function draw(now) {
+      var t = (now - start) / 1000;
+      var W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
+      var gap = 2 * dpr;
+      var bw = (W - (N - 1) * gap) / N;
+      for (var i = 0; i < N; i++) {
+        var center = (i / (N - 1)) * 2 - 1;
+        var env = Math.pow(1 - Math.abs(center), 0.6);
+        var wob = reduce ? 0.55 : (0.5 + 0.5 * Math.sin(t * 2.2 + i * 0.5) * Math.sin(t * 0.7 + i * 0.13));
+        var hh = Math.max(2 * dpr, (0.1 + 0.9 * env * Math.abs(wob)) * H);
+        var x = i * (bw + gap);
+        var y = (H - hh) / 2;
+        ctx.fillStyle = colors[i % colors.length];
+        var r = Math.min(bw / 2, 2 * dpr);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, bw, hh, r);
+        else ctx.rect(x, y, bw, hh);
+        ctx.fill();
+      }
+      if (!reduce) requestAnimationFrame(draw);
+    }
+    requestAnimationFrame(draw);
+  }
+
+  function resetToLanding() {
+    var appc = $('app-container');
+    if (appc) { appc.classList.remove('state-chat'); appc.classList.add('state-landing'); }
+    var thread = $('chat-messages');
+    if (thread) thread.innerHTML = '';
+    Object.keys(brainRenderers).forEach(function (k) {
+      if (brainRenderers[k] && brainRenderers[k].stop) brainRenderers[k].stop();
+    });
+    brainRenderers = {};
+    stagedFiles = [];
+    renderStagedFiles();
+    var ta = $('chat-textarea');
+    if (ta) { ta.value = ''; ta.style.height = 'auto'; }
+    toggleSendButton();
+  }
+
+  function exportRawModel(withParcellation) {
+    if (!lastNetworkResult) { showToast('Run a scan first to export activations.'); return; }
+    var payload;
+    if (withParcellation) {
+      payload = lastNetworkResult;
+    } else {
+      payload = {
+        duration: lastNetworkResult.duration,
+        mediaType: lastNetworkResult.mediaType,
+        networkResult: { summary: lastNetworkResult.networkResult.summary },
+      };
+    }
+    try {
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'tribe-activations-' + (withParcellation ? 'parcellated' : 'summary') + '.json';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+      showToast('Exported ' + (withParcellation ? 'parcellated' : 'summary') + ' activations.');
+    } catch (e) {
+      showToast('Export failed: ' + (e && e.message ? e.message : 'unknown'));
+    }
+  }
+
+  var LENS_LABELS = {
+    brain: 'Brain-response + visual',
+    intent: 'Purchase intent + manipulation',
+    h100: 'H100 inference',
+  };
+
+  function renderLensChips() {
+    var wrap = $('lens-chips');
+    if (!wrap) return;
+    var shown = selectedLenses.filter(function (l) { return l !== 'brain'; });
+    wrap.innerHTML = '';
+    if (shown.length === 0) { wrap.classList.add('hidden'); return; }
+    wrap.classList.remove('hidden');
+    shown.forEach(function (l) {
+      var chip = document.createElement('span');
+      chip.className = 'lens-chip';
+      chip.appendChild(document.createTextNode(LENS_LABELS[l] || l));
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.setAttribute('aria-label', 'Remove lens');
+      btn.textContent = '×';
+      btn.addEventListener('click', function () {
+        selectedLenses = selectedLenses.filter(function (x) { return x !== l; });
+        syncLensMenu();
+        renderLensChips();
+      });
+      chip.appendChild(btn);
+      wrap.appendChild(chip);
+    });
+  }
+
+  function syncLensMenu() {
+    document.querySelectorAll('.lens-option[data-lens]').forEach(function (opt) {
+      var l = opt.getAttribute('data-lens');
+      if (l === 'export') return;
+      var on = selectedLenses.indexOf(l) !== -1;
+      opt.classList.toggle('active', on);
+      opt.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
+  }
+
+  function initSapientShell() {
+    // Theme toggle
+    var themeBtn = $('side-theme-toggle');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function () {
+        var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(cur === 'dark' ? 'light' : 'dark');
+      });
+    }
+
+    // Sidebar collapse
+    var collapseBtn = $('btn-sidebar-collapse');
+    var shell = $('app-shell');
+    if (collapseBtn && shell) {
+      collapseBtn.addEventListener('click', function () { shell.classList.toggle('collapsed'); });
+    }
+
+    // Sidebar tabs
+    var tabChats = $('tab-chats');
+    var tabLibrary = $('tab-library');
+    var list = $('chat-history-list');
+    function selectTab(which) {
+      if (tabChats) { tabChats.classList.toggle('active', which === 'chats'); tabChats.setAttribute('aria-selected', which === 'chats'); }
+      if (tabLibrary) { tabLibrary.classList.toggle('active', which === 'library'); tabLibrary.setAttribute('aria-selected', which === 'library'); }
+      if (list) list.innerHTML = '<p class="side-empty">' + (which === 'library' ? 'Your saved scans will appear here.' : 'No chats yet. Start one above.') + '</p>';
+    }
+    if (tabChats) tabChats.addEventListener('click', function () { selectTab('chats'); });
+    if (tabLibrary) tabLibrary.addEventListener('click', function () { selectTab('library'); });
+
+    // New chat
+    var btnNewChat = $('btn-new-chat');
+    if (btnNewChat) btnNewChat.addEventListener('click', resetToLanding);
+
+    // Get more scans (informational)
+    var btnScans = $('btn-get-scans');
+    if (btnScans) btnScans.addEventListener('click', function () { showToast('You are on the Free plan · 1 scan included.'); });
+
+    // Enforce Qualia label on the model pill
+    var displayLabel = $('engine-display-label');
+    if (displayLabel) displayLabel.textContent = 'Qualia';
+
+    // H100 engine option (priority tier — same cloud inference path)
+    var optH100 = $('option-h100');
+    var optCloud = $('option-cloud-run');
+    function selectEngineOption(activeEl) {
+      [optCloud, optH100].forEach(function (o) { if (o) o.classList.remove('active'); });
+      if (activeEl) activeEl.classList.add('active');
+    }
+    if (optH100) {
+      optH100.addEventListener('click', function () {
+        selectEngineOption(optH100);
+        if (selectedLenses.indexOf('h100') === -1) selectedLenses.push('h100');
+        syncLensMenu(); renderLensChips();
+        showToast('H100 priority tier selected · cloud inference.');
+      });
+    }
+    if (optCloud) {
+      optCloud.addEventListener('click', function () { selectEngineOption(optCloud); });
+    }
+
+    // Upload button + file input change (dropzone was removed)
+    var btnUpload = $('btn-upload');
+    var fileUploader = $('file-uploader');
+    if (btnUpload && fileUploader) {
+      btnUpload.addEventListener('click', function () {
+        fileUploader.accept = 'video/*,audio/*,image/*';
+        fileUploader.click();
+      });
+    }
+    if (fileUploader) {
+      fileUploader.addEventListener('change', function () {
+        if (fileUploader.files && fileUploader.files.length > 0) handleSelectedFile(fileUploader.files[0]);
+        fileUploader.value = '';
+      });
+    }
+
+    // Drag & drop anywhere in the main column
+    var dropTarget = $('app-container');
+    if (dropTarget) {
+      dropTarget.addEventListener('dragover', function (e) { e.preventDefault(); });
+      dropTarget.addEventListener('drop', function (e) {
+        e.preventDefault();
+        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) handleSelectedFile(e.dataTransfer.files[0]);
+      });
+    }
+
+    // Quick-start cards
+    document.querySelectorAll('.quick-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        var mode = card.getAttribute('data-mode');
+        var ta = $('chat-textarea');
+        if (mode === 'audio') {
+          setStimulusMode('audio');
+          if (btnUpload) btnUpload.click();
+          return;
+        }
+        setStimulusMode('text');
+        if (ta) {
+          if (mode === 'ab') ta.value = 'A/B test\nOption A: \nOption B: ';
+          ta.focus();
+          ta.dispatchEvent(new Event('input'));
+        }
+      });
+    });
+
+    // Lens menu
+    var btnLens = $('btn-lens');
+    var lensMenu = $('lens-menu');
+    if (btnLens && lensMenu) {
+      btnLens.addEventListener('click', function (e) {
+        e.stopPropagation();
+        lensMenu.classList.toggle('hidden');
+      });
+      lensMenu.addEventListener('click', function (e) { e.stopPropagation(); });
+      document.addEventListener('click', function () { lensMenu.classList.add('hidden'); });
+    }
+    document.querySelectorAll('.lens-option[data-lens]').forEach(function (opt) {
+      var l = opt.getAttribute('data-lens');
+      opt.addEventListener('click', function (e) {
+        if (l === 'export') {
+          var parcel = $('lens-parcellation');
+          exportRawModel(parcel ? parcel.checked : true);
+          return;
+        }
+        var idx = selectedLenses.indexOf(l);
+        if (idx === -1) selectedLenses.push(l);
+        else if (l !== 'brain') selectedLenses.splice(idx, 1);
+        syncLensMenu();
+        renderLensChips();
+      });
+    });
+    // don't let the parcellation checkbox toggle the export row twice
+    var parcelToggle = $('lens-parcellation');
+    if (parcelToggle) {
+      parcelToggle.addEventListener('click', function (e) { e.stopPropagation(); });
+    }
+    syncLensMenu();
+    renderLensChips();
+
+    initWaveform();
+  }
+
+  // ═══════════════════════════════════════════════════════════════
   // INITIALIZATION ENTRYPOINT
   // ═══════════════════════════════════════════════════════════════
   document.addEventListener('DOMContentLoaded', function () {
+    initTheme();
     initParticles();
     initChatComposer();
     initEngineSelector();
+    initSapientShell();
   });
 })();
